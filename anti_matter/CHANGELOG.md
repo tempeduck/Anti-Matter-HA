@@ -3,6 +3,12 @@
 Detailed per-commit history is in [git log](https://github.com/tempeduck/Anti-Matter-HA/commits/main).
 This file summarizes the notable changes by theme.
 
+## 3.0.3 — Show the saved HomeKit details
+
+- Show HomeKit connection capabilities in decoded details, editor previews and scanner results. Expand QR details for the connection flags, category ID, format version and reserved bits.
+- Infer a blank Device type from recognized HomeKit categories across details, table, search and filters. Preserve custom types; new scans and explicit saves keep the inferred type. Existing records display correctly without a database migration.
+- Preserve format version and reserved bits when editing the HomeKit pairing fields. Add all new labels in every supported language.
+
 ## 3.0.2 — visible Companion scan feedback and batch controls
 
 - **Choose batch mode before opening the Companion camera.** The switch is visible on the native scanner's starting screen and on result sheets. Batch mode defaults off; an existing saved preference is preserved.

@@ -184,6 +184,9 @@
       if (f.setup_id) out.setupId = f.setup_id;
       if (f.homekit_category) out.category = f.homekit_category;
       out.flag = f.homekit_flag;
+      out.categoryId = f.homekit_category_id;
+      out.version = f.homekit_version;
+      out.reserved = f.homekit_reserved;
     }
     if (!out.pairing && !out.fromUri) return null;
     return out;
@@ -372,13 +375,33 @@
     });
   }
 
-  function homekitReadouts(wrap, p) {
+  function homekitReadouts(wrap, p, o) {
     var pc = p.pairing ? p.pairing.slice(0, 3) + "-" + p.pairing.slice(3, 5) + "-" + p.pairing.slice(5) : "—";
+    if (!o.omitPairing) wrap.appendChild(readout(t("decode.hk_pairing"), pc));
     wrap.append(
-      readout(t("decode.hk_pairing"), pc),
       readout(t("decode.hk_setup_id"), p.setupId || "—"),
       readout(t("code.homekit_category"), hkCategoryText(p.category), { text: true, wide: true })
     );
+    if (p.flag != null) {
+      var capabilities = [];
+      if (p.flag & 2) capabilities.push(t("decode.hk_ip"));
+      if (p.flag & 4) capabilities.push(t("decode.ble"));
+      if (p.flag & 8) capabilities.push(t("decode.hk_wac"));
+      wrap.appendChild(readout(t("decode.hk_capabilities"), capabilities.length ? capabilities.join(" · ") : t("code.decode_none"), { text: true, wide: true }));
+    }
+    if (p.fromUri && !o.compact) {
+      var technical = h("details", { class: "disclosure readout--wide", open: o.qrDetailsOpen || null },
+        h("summary", null, h("span", null, t("decode.hk_qr_details")), icon("chevron-down", "chev")),
+        h("div", { class: "readouts" },
+          readout(t("decode.hk_flags"), String(p.flag)),
+          readout(t("decode.hk_category_id"), String(p.categoryId)),
+          readout(t("decode.hk_version"), String(p.version)),
+          readout(t("decode.hk_reserved"), String(p.reserved))));
+      technical.addEventListener("toggle", function () {
+        if (technical.isConnected && typeof o.onQRDetailsToggle === "function") o.onQRDetailsToggle(technical.open);
+      });
+      wrap.appendChild(technical);
+    }
   }
 
   function linkBtn(url, text, iconName) {
@@ -399,7 +422,7 @@
   // =========================================================================
   // Detail sheet
   // =========================================================================
-  var D = { id: null, list: [], unsubs: [] };
+  var D = { id: null, list: [], unsubs: [], qrDetails: new Map() };
   var SHEET = "sheet-detail";
 
   function detailOpen() { return AM.sheets.isOpen(SHEET); }
@@ -547,7 +570,9 @@
       col.appendChild(h("section", { class: "stack detail__decoded", id: "detail-decoded", tabindex: "-1", style: "--gap:10px", "aria-labelledby": "detail-dec-h" },
         h("h3", { class: "section-title", id: "detail-dec-h" }, icon("binary"), h("span", null, t("detail.decoded")), h("span", { class: "spacer" }),
           h("span", { class: "tag tag--ok" }, icon("shield-check"), h("span", null, t("detail.decoded_offline")))),
-        K.readoutsEl(dec, { links: dec.kind === "homekit" ? null : links }),
+        K.readoutsEl(dec, { links: dec.kind === "homekit" ? null : links,
+          qrDetailsOpen: D.qrDetails.get(code.id),
+          onQRDetailsToggle: function (open) { D.qrDetails.set(code.id, open); } }),
         dec.kind === "homekit" ? null : links));
     }
     return col;
@@ -602,7 +627,7 @@
     var conns = AM.filters.CONN.filter(function (c) { return code[c.key]; });
     var cats = AM.cat.of(code);
     var facts = h("dl", { class: "facts" },
-      fact(t("filter.type"), str(code.device_type) ? h("span", { dir: "auto" }, humanType(code.device_type)) : dash()),
+      fact(t("filter.type"), AM.proto.deviceType(code) ? h("span", { dir: "auto" }, humanType(AM.proto.deviceType(code))) : dash()),
       fact(t("code.area"), str(code.area) ? [icon("map-pin"), h("span", { dir: "auto" }, str(code.area))] : dash()),
       fact(t("code.connectivity"), conns.length ? conns.map(function (c) { return h("span", { class: "fact-conn" }, icon(c.icon), t(c.label)); }) : dash()),
       fact(t("categories.title"), cats.length ? cats.map(function (c) {

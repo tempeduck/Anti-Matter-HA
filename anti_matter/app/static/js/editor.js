@@ -97,7 +97,7 @@
       inUse: !!c.in_use,
       vendor: c.device_vendor || "",
       product: c.device_product || "",
-      type: c.device_type || "",
+      type: AM.proto.deviceType(c),
       area: c.area || "",
       description: c.description || "",
       notes: c.notes || "",
@@ -190,6 +190,7 @@
       : ct === "other" ? (lc(std) === "zigbee" ? "zigbee" : lc(std) === "tuya" ? "tuya" : "other")
         : PROTOS.indexOf(ct) >= 0 ? ct : "other";
     m.proto = p;
+    if (!str(m.type)) m.type = AM.proto.deviceType(parsed);
     var manual = parsed.manual_code == null ? "" : String(parsed.manual_code);
     var qr = parsed.qr_payload == null ? "" : String(parsed.qr_payload);
     if (p === "matter") { m.matter.manual = fmtMatter(manual); m.matter.qr = str(qr); }
@@ -243,7 +244,9 @@
     if (d.length !== 8) return false;
     var sid = H.normalizeSetupId(m.homekit.setupId);
     if (str(m.homekit.setupId) && !sid) return false;
-    m.homekit.uri = H.composeSetupUri({ categoryId: H.categoryIdFor(m.homekit.category), flag: m.homekit.flag == null ? 2 : m.homekit.flag, password: d, setupId: sid });
+    var fields = H.decodeFieldsFromUri(m.homekit.uri);
+    m.homekit.uri = H.composeSetupUri({ categoryId: H.categoryIdFor(m.homekit.category), flag: m.homekit.flag == null ? 2 : m.homekit.flag, password: d, setupId: sid,
+      version: fields.homekit_version, reserved: fields.homekit_reserved });
     return true;
   }
   function syncZwaveFromQr() {
@@ -847,7 +850,7 @@
   function typeOptions() {
     var seen = new Set();
     var out = [];
-    AM.store.vault.codes.map(function (c) { return str(c.device_type); }).concat(DEVICE_TYPES).forEach(function (v) {
+    AM.store.vault.codes.map(function (c) { return AM.proto.deviceType(c); }).concat(DEVICE_TYPES).forEach(function (v) {
       var k = lc(v);
       if (v && !seen.has(k)) { seen.add(k); out.push(v); }
     });

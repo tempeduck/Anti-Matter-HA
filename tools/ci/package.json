@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "smoke": "node smoke.mjs",
-    "scanner": "node scanner.mjs"
+    "scanner": "node scanner.mjs",
+    "homekit": "node homekit.mjs"
   },
   "devDependencies": {
     "playwright": "^1.63.0"

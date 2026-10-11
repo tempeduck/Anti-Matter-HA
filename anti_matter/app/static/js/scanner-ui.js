@@ -1539,6 +1539,13 @@
       }
     } else if (p === "homekit") {
       var b = it.body;
+      var K = global.AntiMatterSheetKit;
+      var hk = K && K.decodeHomekit(b.qr_payload, b.manual_code, b.setup_id, b.homekit_category);
+      if (hk) {
+        var shared = K.readoutsEl({ kind: "homekit", parsed: hk }, { compact: true, omitPairing: true });
+        it.readoutsEl = shared;
+        return shared;
+      }
       if (b.setup_id) list.push(readout(t("scan.key_setup_id"), b.setup_id));
       if (b.qr_payload) list.push(readout(t("scan.key_category"), hkCatName(b.homekit_category || "other"), null, null, { text: true }));
     } else if (p === "zigbee" && it.parsed.zigbee_ieee) {
@@ -1680,6 +1687,8 @@
       homekit_flag: b.homekit_flag != null ? b.homekit_flag : 2, custom_standard: b.custom_standard || "",
     };
     var out = Object.assign({}, it.parsed, pre);
+    var type = AM.proto.deviceType(b);
+    if (type) out.device_type = type;
     if (!S.single || it.nameTouched) out.name = (it.name || "").trim() || it.defaultName || "";
     var v = vendorOf(it), pr = productOf(it);
     if (v) out.device_vendor = v;
@@ -1727,6 +1736,8 @@
       body.setup_id = b.setup_id || "";
       body.homekit_category = b.homekit_category || "other";
       if (b.homekit_flag != null) body.homekit_flag = b.homekit_flag;
+      var type = AM.proto.deviceType(b);
+      if (type) body.device_type = type;
     }
     var v = vendorOf(it), pr = productOf(it);
     if (v) body.device_vendor = v;

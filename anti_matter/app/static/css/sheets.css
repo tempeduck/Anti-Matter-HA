@@ -13,6 +13,7 @@
 .pills__set { display: flex; flex-wrap: wrap; gap: 6px; }
 .pills__note { font-size: var(--fs-small); align-self: center; }
 .readout .pills { align-items: center; }
+.readouts.p-homekit .key, .readouts.p-homekit .readout__value--text { overflow-wrap: anywhere; }
 .readout__src { align-items: flex-start; }
 .readout__src .icon { margin-block-start: 2px; flex: none; }
 .readout__dsk { display: block; font-size: 14px; line-height: 1.6; white-space: nowrap; overflow-x: auto; }
@@ -22,6 +23,7 @@
 .detail .sheet__title { overflow-wrap: anywhere; }
 .detail .detail__meta .status { font-size: var(--fs-small); }
 .detail__decoded { scroll-margin-block-start: 12px; border-radius: var(--r-lg); }
+.detail__decoded > .section-title { flex-wrap: wrap; }
 .detail__decoded:focus { outline: none; }
 .detail__decoded:focus-visible { outline: 2.5px solid var(--focus); outline-offset: 6px; }
 .detail .stage { min-block-size: 300px; }

@@ -21,7 +21,7 @@
 
   var doc = global.document;
   var I18N = global.AntiMatterI18n;
-  var VERSION = "3.0.2";
+  var VERSION = "3.0.3";
   var V = "?v=" + VERSION;
   var ICONS_URL = "./static/brand/icons.svg" + V;
   var ASSETS = "./static/assets/";
@@ -1349,6 +1349,13 @@
 
   AM.proto = {
     LIST: PROTOS.slice(),
+    /** User-entered type wins; otherwise infer a known HomeKit category without changing storage. */
+    deviceType: function (code) {
+      var typed = String(code && code.device_type != null ? code.device_type : "").trim();
+      if (typed || !code || AM.proto.of(code) !== "homekit" || !HK()) return typed;
+      var fields = HK().decodeFieldsFromUri(code.qr_payload);
+      return HK().deviceTypeForCategory(fields.homekit_category || code.homekit_category);
+    },
     /** UI protocol of a stored code: matter|homekit|zwave|zigbee|tuya|other (Zigbee/Tuya = other + custom_standard). */
     of: function (code) {
       if (!code) return "other";
@@ -1695,7 +1702,7 @@
     return d ? d.name || "" : "";
   }
   function searchText(code) {
-    var parts = [code.name, code.device_type, code.device_vendor, code.device_product, code.area, code.description,
+    var parts = [code.name, AM.proto.deviceType(code).replace(/_/g, " "), code.device_type, code.device_vendor, code.device_product, code.area, code.description,
       code.manual_code, code.qr_payload, code.notes, code.custom_standard, AM.proto.name(code), haName(code)];
     AM.cat.of(code).forEach(function (c) { parts.push(c.name); });
     return parts.filter(Boolean).join("\n").toLocaleLowerCase();
@@ -1754,7 +1761,7 @@
       if (!prop) return [];
       var map = new Map();
       (codes || AM.store.vault.codes).forEach(function (c) {
-        var raw = String(c[prop] == null ? "" : c[prop]).trim();
+        var raw = field === "type" ? AM.proto.deviceType(c) : String(c[prop] == null ? "" : c[prop]).trim();
         var k = fkey(raw);
         var e = map.get(k);
         if (!e) { e = { value: k, count: 0, spellings: new Map() }; map.set(k, e); }
@@ -1790,7 +1797,7 @@
       }
       if (F.protocol.size && skip.indexOf("protocol") < 0 && !F.protocol.has(AM.proto.of(code))) return false;
       for (var f in FIELDS) {
-        if (F[f].size && skip.indexOf(f) < 0 && !F[f].has(fkey(code[FIELDS[f]]))) return false;
+        if (F[f].size && skip.indexOf(f) < 0 && !F[f].has(fkey(f === "type" ? AM.proto.deviceType(code) : code[FIELDS[f]]))) return false;
       }
       if (F.conn.size && skip.indexOf("conn") < 0) {
         var any = CONN.filter(function (c) { return code[c.key]; });
@@ -1810,7 +1817,7 @@
       var codes = AM.store.vault.codes;
       Object.keys(FIELDS).forEach(function (f) {
         if (!F[f].size) return;
-        var live = new Set(codes.map(function (c) { return fkey(c[FIELDS[f]]); }));
+        var live = new Set(codes.map(function (c) { return fkey(f === "type" ? AM.proto.deviceType(c) : c[FIELDS[f]]); }));
         F[f].forEach(function (v) { if (!live.has(v)) { F[f].delete(v); changed = true; } });
       });
       F.cats.forEach(function (id) { if (id !== NONE && !AM.store.catById.has(id)) { F.cats.delete(id); changed = true; } });

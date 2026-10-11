@@ -42,6 +42,21 @@
 
   const DEFAULT_FLAG = 2;
 
+  // Only map categories with an unambiguous equivalent in the general type field.
+  const DEVICE_TYPES = {
+    airConditioner: "climate", appleTv: "media_player", bridge: "hub",
+    door: "cover", doorLock: "lock", fan: "fan", garage: "garage_door",
+    heater: "climate", ipCamera: "camera", lightbulb: "light", outlet: "plug",
+    programmableSwitch: "button", sensor: "sensor", speaker: "speaker",
+    switch: "switch", targetController: "remote", television: "media_player",
+    thermostat: "thermostat", videoDoorBell: "doorbell", window: "cover",
+    windowCovering: "cover",
+  };
+
+  function deviceTypeForCategory(category) {
+    return Object.prototype.hasOwnProperty.call(DEVICE_TYPES, category) ? DEVICE_TYPES[category] : "";
+  }
+
   function pairingDigits(value) {
     const d = String(value || "").replace(/\D/g, "");
     return d.length === 8 ? d : "";
@@ -115,7 +130,7 @@
     const flag = rest & 0xf;
     rest >>= 4;
     const categoryId = rest & 0xff;
-    return { password, flag, categoryId };
+    return { password, flag, categoryId, reserved: Number((n >> 39n) & 0xfn), version: Number((n >> 43n) & 0x7n) };
   }
 
   function parseSetupUri(uri) {
@@ -156,6 +171,9 @@
     if (fields.categoryId !== undefined) {
       out.homekit_flag = fields.flag;
       out.homekit_category = categoryNameForId(fields.categoryId);
+      out.homekit_category_id = fields.categoryId;
+      out.homekit_version = fields.version;
+      out.homekit_reserved = fields.reserved;
     }
     return out;
   }
@@ -224,6 +242,7 @@
     CATEGORIES,
     CATEGORY_KEYS,
     DEFAULT_FLAG,
+    deviceTypeForCategory,
     pairingDigits,
     normalizeSetupId,
     normalizeUriBody,
