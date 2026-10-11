@@ -365,6 +365,8 @@
 .native-wait__icon { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; }
 .native-wait h2 { font-size: var(--fs-title-2); }
 .native-wait p { color: var(--hud-text-2); max-inline-size: 36ch; }
+.native-wait .batch-row { color: var(--text); inline-size: min(100%, 360px); text-align: start; }
+.native-wait .native-wait__hint { font-size: var(--fs-small); }
 .native-wait__actions { display: grid; gap: 8px; justify-items: center; margin-block-start: 4px; }
 
 /* Photo + paste panels (theme coloured, under the dark HUD) */

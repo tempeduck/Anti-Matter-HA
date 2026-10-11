@@ -21,7 +21,7 @@
 
   var doc = global.document;
   var I18N = global.AntiMatterI18n;
-  var VERSION = "3.0.1";
+  var VERSION = "3.0.2";
   var V = "?v=" + VERSION;
   var ICONS_URL = "./static/brand/icons.svg" + V;
   var ASSETS = "./static/assets/";
@@ -477,7 +477,7 @@
       ser: function (n) { return String(n); },
     },
     invert: { key: "antimatter-qr-invert", def: false, parse: bool01.parse, ser: bool01.ser },
-    batch: { key: "antimatter-scan-batch", def: true, parse: bool01.parse, ser: bool01.ser },
+    batch: { key: "antimatter-scan-batch", def: false, parse: bool01.parse, ser: bool01.ser },
     labelNames: { key: "antimatter-labels-names", def: true, parse: bool01.parse, ser: bool01.ser },
     labelCodes: { key: "antimatter-labels-codes", def: true, parse: bool01.parse, ser: bool01.ser },
   };

@@ -4,7 +4,8 @@
   "description": "Browser smoke test run by GitHub Actions (see .github/workflows/ci.yml).",
   "type": "module",
   "scripts": {
-    "smoke": "node smoke.mjs"
+    "smoke": "node smoke.mjs",
+    "scanner": "node scanner.mjs"
   },
   "devDependencies": {
     "playwright": "^1.63.0"

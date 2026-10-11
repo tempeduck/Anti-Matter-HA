@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="anti_matter/CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.0.1-blue" alt="Version 3.0.0"></a>
+  <a href="anti_matter/CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.0.2-blue" alt="Version 3.0.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Home%20Assistant-add--on-41BDF5?logo=homeassistant&logoColor=white" alt="Home Assistant add-on">
   <img src="https://img.shields.io/badge/aarch64-yes-green" alt="Supports aarch64">
@@ -106,7 +106,7 @@ that Anti-Matter cannot change. You still have three good options:
 
 **Other scanning features:**
 
-- **Batch scanning.** With *Keep scanning after saving* on, **Save & scan next** stores the code and goes straight back to the camera. A tray lists the session with **Undo**, and **Done** shows a summary with **Review**, which filters the vault to what you just scanned.
+- **Batch scanning.** **Batch mode** starts off and remembers your choice. In the Companion app, choose it before opening the camera; each recognized code is saved automatically, then a visible **Saved** receipt offers **Scan next**. In the web scanner, **Save & scan next** stores the code and returns to the camera. A tray lists the session with **Undo**, and **Done** shows a summary with **Review**.
 - **Several codes in one photo.** A photo of a whole box of labels shows every code it finds, numbered on the image. You tick the ones to save.
 - **A decoder that keeps trying.** Hard photos get more passes: grayscale and contrast, inverted, upscaled, and tiled for large images. Screenshots work too.
 - **Duplicate detection.** Anti-Matter checks each result against your vault before anything is saved. It recognises the same device even when its QR and its printed manual code look different. A duplicate is never saved twice, and **Open existing** takes you to the one you already have.
@@ -180,12 +180,12 @@ Most of these translations are new in 3.0, and corrections from native speakers 
 
 ## Install
 
-[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FCl3tus%2FHA-Addons)
+[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Ftempeduck%2FAnti-Matter-HA)
 
 Or add the repository by hand:
 
 1. In Home Assistant, go to **Settings → Apps → App store**, open the **⋮** menu (top right) and choose **Repositories**.
-2. Add `https://github.com/Cl3tus/HA-Addons` and close the dialog.
+2. Add `https://github.com/tempeduck/Anti-Matter-HA` and close the dialog.
 3. Find **Anti-Matter** in the store, select **Install**, then **Start**.
 4. Open **Anti-Matter** from the sidebar. It runs through Home Assistant ingress, so no ports are opened.
 
@@ -335,9 +335,9 @@ Outside Home Assistant, the device and area features are simply off.
 - **Back-end tests:** `cd anti_matter && ../.venv/bin/python -m pytest -q tests`
 - **Screenshots:** [`tools/screenshots`](tools/screenshots/README.md) regenerates every README and wiki image, the GIF and the banner from the real UI with a fake demo vault (`npm install`, then `node capture.mjs`).
 - **Z-Wave device names:** `anti_matter/tools/build_zwave_device_db.py` refreshes the bundled zwave-js snapshot.
-- **Checks:** `python3 tools/ci/version.py check` (the version matches everywhere), `python3 tools/ci/check_i18n.py --locales` (translation keys, placeholders, plurals) and a browser smoke test (`cd tools/ci && npm ci && npx playwright install chromium && node smoke.mjs`).
+- **Checks:** `python3 tools/ci/version.py check` (the version matches everywhere), `python3 tools/ci/check_i18n.py --locales` (translation keys, placeholders, plurals) and browser checks (`cd tools/ci && npm ci && npx playwright install chromium`, then `node smoke.mjs` and `node scanner.mjs`). The scanner checks use synthetic codes and a Companion camera model, including save failures and cancellation.
 - **CI:** every push and pull request runs the add-on linter, those checks, the back-end tests, the smoke test and a Docker build for amd64 and aarch64 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
-- **Releasing:** run `python3 tools/ci/version.py bump X.Y.Z`, which updates every copy of the version and adds a CHANGELOG stub. Fill in the CHANGELOG entry and push to `main`. [`release.yml`](.github/workflows/release.yml) then runs CI, tags `vX.Y.Z`, publishes a GitHub release with that CHANGELOG section, and mirrors `anti_matter/` into [HA-Addons](https://github.com/Cl3tus/HA-Addons). The mirror step needs a `HA_ADDONS_TOKEN` secret: a fine-grained token with *Contents: read and write* on the HA-Addons repository. Without it the release is still made and the mirror step is skipped with a warning. The `HA_ADDONS_REPO` repository variable overrides the target.
+- **Releasing:** run `python3 tools/ci/version.py bump X.Y.Z`, which updates every copy of the version and adds a CHANGELOG stub. Fill in the CHANGELOG entry and push to `main`. [`release.yml`](.github/workflows/release.yml) runs CI, tags `vX.Y.Z` and publishes a GitHub release in this repository. Home Assistant builds the add-on from this repository directly.
 
 </details>
 
@@ -347,10 +347,10 @@ Anti-Matter is a rewrite of [Rematters](https://github.com/Rematters/Rematters-H
 ([JesseFPV](https://rematters.casa/)), reworked into a cloud-free, local-only add-on. Full credit to Jesse for the
 original Rematters add-on and its design.
 
-This repository is a fork of [Cl3tus/Anti-Matter-HA](https://github.com/Cl3tus/Anti-Matter-HA). Since its 2.0.5
-release, about **82% of the code is new or updated**: a rebuilt interface and scanner, 24 languages, tests, and CI
-and release automation. The figure counts hand-written code only, not translations, docs or vendored libraries. The
-backend is still largely Cl3tus's work.
+This fork builds on [kedube/Anti-Matter-HA](https://github.com/kedube/Anti-Matter-HA), including its 3.0.1
+redesign, scanner, 24 languages, tests and release tooling. Its original base is
+[Cl3tus/Anti-Matter-HA](https://github.com/Cl3tus/Anti-Matter-HA), whose work still underlies much of the backend.
+This fork adds visible Companion scan confirmations and an explicit batch-mode choice.
 
 Anti-Matter builds on [zxing-wasm](https://github.com/Sec-ant/zxing-wasm) (MIT) and
 [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) (Apache-2.0), [Lucide](https://lucide.dev) icons (ISC),

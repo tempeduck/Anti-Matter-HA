@@ -4,7 +4,7 @@ Anti-Matter is a private vault for your smart-home **pairing codes**: Matter, Ho
 anything else. It scans and decodes each code, stores it on your Home Assistant, and shows a clean, scannable label
 whenever you need to pair a device again.
 
-Screenshots and the project page: <https://github.com/Cl3tus/Anti-Matter-HA>
+Screenshots and the project page: <https://github.com/tempeduck/Anti-Matter-HA>
 
 ---
 
@@ -28,7 +28,7 @@ Screenshots and the project page: <https://github.com/Cl3tus/Anti-Matter-HA>
 
 Press **Scan** (or `S`). Anti-Matter picks the best scanner for where you are:
 
-1. **In the Home Assistant Companion app**, the app's **native scanner** opens. This works over `http://` too.
+1. **In the Home Assistant Companion app**, choose **Batch mode**, then **Open the app scanner** to open the native camera. This works over `http://` too.
 2. **In a browser on `https://`**, the **live camera** starts.
 3. **In a browser on `http://`**, a **photo page** opens instead, because browsers do not allow the camera there. See *Camera not available* under Troubleshooting.
 
@@ -61,7 +61,7 @@ When a code is read, a result sheet shows:
 - **Name**, pre-filled from the official Matter registry ("From DCL"), the Z-Wave device database ("From device DB"), the HomeKit accessory type, or "Scanned device N". You can change it now or later.
 - The decoded details: vendor, product, passcode, discriminator, security classes and so on.
 - **Categories** to file it under.
-- **Keep scanning after saving** (batch mode). Your choice is remembered in this browser.
+- **Batch mode**, off by default. Your choice is remembered in this browser.
 
 Then choose one of:
 
@@ -76,9 +76,15 @@ everything again.
 
 ### Companion app scanner
 
-Inside the Home Assistant app, the native scanner opens and Anti-Matter shows *Scanning with the Home Assistant app*.
-In batch mode, each code is saved as soon as you scan it, and the app tells you "Saved: …" or "Already in your vault:
-…". **Use the web camera instead** switches to the browser camera, which needs HTTPS.
+Inside the Home Assistant app, **Batch mode** is visible before the native camera opens. Leave it off to review
+each code before saving, or turn it on to save recognized codes automatically. Existing saved choices are preserved.
+Then tap **Open the app scanner**.
+
+After a batch save, the native camera closes and a visible **Saved** receipt shows the device name and code.
+Tap **Scan next** to reopen the camera, **Open** to view the saved entry, or **Done** to finish. The receipt also
+has a batch toggle. Duplicate codes show **Already in your vault** without adding another entry; save errors
+show an error instead of a saved receipt. This pauses after every scan so confirmation remains visible outside
+the Companion camera overlay. **Use the web camera instead** switches to the browser camera, which needs HTTPS.
 
 ### What gets recognised
 

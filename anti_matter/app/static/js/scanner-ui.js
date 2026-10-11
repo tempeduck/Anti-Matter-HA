@@ -543,7 +543,8 @@
       return;
     }
     if (m === "camera") {
-      if (S.camEngine === "native") startNative();
+      // The app camera covers the web controls. Let users choose batch mode first.
+      if (S.camEngine === "native") setView("native");
       else beginCamera();
     } else if (m === "photo") {
       setView("photo");
@@ -569,7 +570,7 @@
     build();
     setMeta();
     renderTray();
-    startNative();
+    setView("native");
   }
 
   /** view: starting | permission | live | locked | denied | native | photo | decoding | photo-result | paste */
@@ -680,7 +681,9 @@
     return h("div", { class: "native-wait" },
       h("div", { class: "native-wait__art" }, orbits(180, 110), h("span", { class: "native-wait__icon" }, ic("smartphone", "icon--lg"))),
       h("h2", null, t("scan.native_title")),
-      h("p", null, t("scan.native_body")),
+      h("p", null, t(S.native.active ? "scan.native_body" : "scan.native_ready_body")),
+      S.single ? null : batchRow("scn-native-batch"),
+      S.single ? null : h("p", { id: "scn-native-batch-help", class: "native-wait__hint" }, t(batchOn() ? "scan.batch_hint" : "scan.single_hint")),
       counts.saved || counts.dups ? h("span", { class: "hud-pill glass" }, h("span", { class: "dot dot--paused" }), h("b", null, sessionText(counts))) : null,
       h("div", { class: "native-wait__actions" },
         S.native.active ? null : button("btn btn--primary", "smartphone", t("scan.native_again"), function () { startNative(); }),
@@ -1127,7 +1130,7 @@
     // closed / aborted: the user left the app scanner; nothing else to do here.
     if (!S.result && !S.multi && S.view === "native") closeNow("native-closed");
   }
-  /** Batch in the app scanner: save new codes at once, report duplicates natively, hand anything unclear to the sheet. */
+  /** Batch in the app scanner: save recognized codes, then show a visible receipt outside the camera. */
   function nativeResult(text, token) {
     if (!S || S.nativeToken !== token) return { keepOpen: false };
     var items = itemsFrom([{ text: text }], "native");
@@ -1143,19 +1146,25 @@
       if (dup) it.dup = dup;
       if (it.dup) {
         it.kind = "dup";
-        addTrayDup(it);
-        AM.haptic("warning");
+        S.native.handoff = true;
+        showResult(it, { source: "native" });
         AM.log("Scan: captured protocol=" + it.proto + " source=native duplicate");
-        return { keepOpen: true, notify: t("scan.native_dup", { name: it.dup.name }) };
+        return { keepOpen: false };
       }
       return waitEnriched(it, 1200).then(function () {
+        if (!S || S.nativeToken !== token) return { keepOpen: false };
         var sug = suggestName(it);
         it.name = (sug && sug.name) || nextDefaultName();
         return saveItem(it).then(function (ok) {
-          if (!S) return { keepOpen: false };
-          setView("native");
-          if (ok === true) return { keepOpen: true, notify: t("scan.native_saved", { name: it.name }) };
-          if (ok === "dup") return { keepOpen: true, notify: t("scan.native_dup", { name: it.dup.name }) };
+          if (!S || S.nativeToken !== token) return { keepOpen: false };
+          if (ok === true || ok === "dup") {
+            // Companion notifications can render beneath its camera overlay. Close
+            // the camera and show an explicit receipt before the next batch scan.
+            S.native.handoff = true;
+            showResult(it, { source: "native" });
+            AM.refresh({ force: true });
+            return { keepOpen: false };
+          }
           S.native.handoff = true;
           return { keepOpen: false };
         });
@@ -1205,15 +1214,15 @@
     S.result = it;
     S.multi = null;
     it.meta = meta;
-    it.defaultName = nextDefaultName();
+    it.defaultName = it.saved ? it.saved.name : nextDefaultName();
     it.info = it.proto === "matter" ? matterInfo(it.body) : it.proto === "zwave" ? zwaveInfo(it.body) : null;
     var sug = suggestName(it);
-    it.name = (sug && sug.name) || it.defaultName;
-    it.nameSrc = sug ? sug.src : null;
-    AM.haptic(it.kind === "dup" ? "warning" : "success");
+    it.name = it.saved ? it.saved.name : (sug && sug.name) || it.defaultName;
+    it.nameSrc = !it.saved && sug ? sug.src : null;
+    if (!it.saved) AM.haptic(it.kind === "dup" ? "warning" : "success");
     if (it.kind === "dup" && !S.single) addTrayDup(it);
     enrich(it);
-    checkServer(it);
+    if (!it.saved) checkServer(it);
     if (S.single && it.kind === "new" && !it.low && !it.unknown) {
       // Editor mode: the first plain result fills the open form (after the lock is visible for a moment).
       it.delivering = true;
@@ -1234,7 +1243,7 @@
     else {
       if (src === "photo") setView("photo-result");
       else if (src === "paste") setView("paste");
-      else if (src === "native") setView("native");
+      else if (src === "native") setView("idle"); // The app camera has handed this result back to the web UI.
       else { syncState(); renderHud(); }
     }
     renderSheet();
@@ -1330,29 +1339,29 @@
     var dup = it.kind === "dup";
     var sheet = els.sheet;
     sheet.className = "result" + (dup ? " result--dup" : "");
-    var variant = dup ? "dup" : it.unknown ? "unknown" : it.low ? "low" : "new";
-    var title = { dup: t("scan.already_in_vault"), unknown: t("scan.unknown_title"), low: t("scan.low_title"), new: t("scan.code_found") }[variant];
-    var dotIcon = { dup: "triangle-alert", unknown: "circle-help", low: "circle-help", new: "check" }[variant];
+    var variant = it.saved ? "saved" : dup ? "dup" : it.unknown ? "unknown" : it.low ? "low" : "new";
+    var title = { saved: t("scan.saved_toast", { name: it.saved && it.saved.name }), dup: t("scan.already_in_vault"), unknown: t("scan.unknown_title"), low: t("scan.low_title"), new: t("scan.code_found") }[variant];
+    var dotIcon = { saved: "check", dup: "triangle-alert", unknown: "circle-help", low: "circle-help", new: "check" }[variant];
     var tag = dup
       ? h("span", { class: "tag tag--warn" }, ic("copy"), h("span", null, t("scan.duplicate_tag")))
-      : h("span", { class: "tag tag--ok" }, ic("sparkles"), h("span", null, t("scan.new_to_vault")));
+      : h("span", { class: "tag tag--ok" }, ic(it.saved ? "check" : "sparkles"), h("span", null, t(it.saved ? "scan.saved" : "scan.new_to_vault")));
     var head = h("header", { class: "result__head" },
       h("div", { class: "result__heading" },
-        h("h2", { class: "result__title", id: "scn-r-title" }, h("span", { class: ["ok-dot", variant !== "new" && variant !== "dup" && "ok-dot--info"] }, ic(dotIcon)), h("span", null, title), tag),
+        h("h2", { class: "result__title", id: "scn-r-title", role: it.saved ? "status" : null }, h("span", { class: ["ok-dot", variant !== "new" && variant !== "saved" && variant !== "dup" && "ok-dot--info"] }, ic(dotIcon)), h("span", null, title), tag),
         subline(it)),
-      h("button", { type: "button", class: "icon-btn icon-btn--sm", tip: dup ? t("scan.close_result") : t("scan.skip_tip"), kbd: "Esc", onclick: skipResult }, ic("x")));
+      h("button", { type: "button", class: "icon-btn icon-btn--sm", tip: it.saved ? t("action.close") : dup ? t("scan.close_result") : t("scan.skip_tip"), kbd: "Esc", onclick: it.saved ? function () { closeNow("done"); } : skipResult }, ic("x")));
     var body = h("div", { class: "result__body" });
     body.appendChild(receipt(it));
     if (it.low) body.appendChild(lowNotice(it)); // the HomeKit/Other choice stays available, also on a duplicate
     if (dup) body.appendChild(dupNotice(it));
     else {
       if (it.unknown) body.appendChild(unknownNotice(it));
-      if (!S.single) body.appendChild(nameField(it));
+      if (!S.single && !it.saved) body.appendChild(nameField(it));
     }
     var ro = readouts(it);
     if (ro) body.appendChild(ro);
-    if (!dup && !S.single) {
-      body.appendChild(catsField(it));
+    if (!S.single) {
+      if (!dup && !it.saved) body.appendChild(catsField(it));
       body.appendChild(batchRow());
     }
     var foot = h("footer", { class: "result__foot" }, footer(it));
@@ -1573,15 +1582,19 @@
     return h("div", { class: "field" }, h("span", { class: "field__label", id: "scn-cats-l" }, t("scan.categories"), h("span", { class: "opt" }, t("scan.optional"))), row);
   }
 
-  function batchRow() {
-    var sw = h("input", { type: "checkbox", class: "switch", role: "switch", id: "scn-batch" });
+  function batchRow(id) {
+    id = id || "scn-batch";
+    var sw = h("input", { type: "checkbox", class: "switch", role: "switch", id: id, "aria-describedby": id === "scn-native-batch" ? "scn-native-batch-help" : null });
     sw.checked = batchOn();
     sw.addEventListener("change", function () {
       AM.prefs.set("batch", sw.checked);
-      var p = S && S.els.sheet.querySelector(".result__foot .btn--primary");
-      if (p && S.result) { var fresh = primaryButton(S.result); p.replaceWith(fresh); }
+      AM.$$(".batch-row input", S.els.root).forEach(function (input) { input.checked = sw.checked; });
+      var hint = byId("scn-native-batch-help");
+      if (hint) hint.textContent = t(sw.checked ? "scan.batch_hint" : "scan.single_hint");
+      var foot = S && S.els.sheet.querySelector(".result__foot");
+      if (foot && S.result) AM.fill(foot, footer(S.result));
     });
-    return h("label", { class: "batch-row", for: "scn-batch" }, ic("layers"), h("span", null, t("scan.keep_scanning")), sw);
+    return h("label", { class: "batch-row", for: id }, ic("layers"), h("span", null, t("scan.batch_mode")), sw);
   }
 
   function nextLabel() {
@@ -1592,7 +1605,11 @@
   }
   function primaryButton(it) {
     var label, iconName = "check";
-    if (it.kind === "dup") { var nl = nextLabel(); iconName = nl[0]; label = nl[1]; }
+    if (it.saved) {
+      if (batchOn()) { var savedNext = nextLabel(); iconName = savedNext[0]; label = savedNext[1]; }
+      else label = t("action.done");
+    }
+    else if (it.kind === "dup") { var nl = nextLabel(); iconName = nl[0]; label = nl[1]; }
     else if (S.single) label = t("scan.use_code");
     else if (it.unknown) label = batchOn() ? t("scan.save_other_next") : t("scan.save_as_other");
     else label = batchOn() ? t("editor.save_scan_next") : t("action.save");
@@ -1601,6 +1618,11 @@
     return b;
   }
   function footer(it) {
+    if (it.saved) return [
+      batchOn() ? button("btn", null, t("action.done"), function () { closeNow("done"); }) : h("span"),
+      button("btn", "maximize-2", t("scan.open"), function () { openExisting(it.saved.id); }),
+      primaryButton(it),
+    ];
     if (it.kind === "dup") return [button("btn", "maximize-2", t("scan.open"), function () { openExisting(it.dup.id); }), h("span"), primaryButton(it)];
     if (S.single) return [button("btn", null, t("scan.skip"), skipResult), h("span"), primaryButton(it)];
     return [
@@ -1615,6 +1637,10 @@
     if (S.multi) { saveMulti(); return; }
     var it = S.result;
     if (!it) return;
+    if (it.saved) {
+      if (batchOn()) resumeSource({ clearPaste: true }); else closeNow("done");
+      return;
+    }
     if (it.kind === "dup") { resumeSource({ clearPaste: true }); return; }
     if (S.single) { deliver(it); return; }
     saveResult(it);

@@ -82,6 +82,10 @@ jobs:
         working-directory: tools/ci
         env:
           PYTHON: python
+      - run: node scanner.mjs
+        working-directory: tools/ci
+        env:
+          PYTHON: python
 
   build:
     name: Docker build (${{ matrix.arch }})

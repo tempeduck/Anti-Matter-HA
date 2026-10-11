@@ -1,7 +1,15 @@
 # Changelog
 
-Detailed per-commit history is in [git log](https://github.com/Cl3tus/Anti-Matter-HA/commits/main).
+Detailed per-commit history is in [git log](https://github.com/tempeduck/Anti-Matter-HA/commits/main).
 This file summarizes the notable changes by theme.
+
+## 3.0.2 — visible Companion scan feedback and batch controls
+
+- **Choose batch mode before opening the Companion camera.** The switch is visible on the native scanner's starting screen and on result sheets. Batch mode defaults off; an existing saved preference is preserved.
+- **See what was saved.** Each automatic native-camera save dismisses the camera and shows a **Saved** receipt with the stored name, **Open**, **Done** and **Scan next**. This pauses between scans so feedback stays visible. Duplicates also return to a visible result and are not saved twice.
+- **Cancellation and save errors.** A canceled lookup cannot later start a batch save. Storage errors never show a saved receipt.
+- **Regression coverage and translations.** Native-camera integration checks use a synthetic vault and cover save, duplicate, error, cancellation and compact translated layouts. Batch instructions are available in all 24 languages.
+- **Fork distribution.** Based on kedube's 3.0.1; repository metadata and installation links point to this fork, and release automation publishes here.
 
 ## 3.0.1 — moving a vault over from another install
 

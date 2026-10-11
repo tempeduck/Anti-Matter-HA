@@ -4,8 +4,8 @@
 
 # Anti-Matter
 
-[![Version](https://img.shields.io/badge/version-3.0.1-blue)](https://github.com/Cl3tus/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/Cl3tus/Anti-Matter-HA/blob/main/LICENSE)
+[![Version](https://img.shields.io/badge/version-3.0.2-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/LICENSE)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![24 languages](https://img.shields.io/badge/languages-24-7B61FF)
@@ -19,8 +19,8 @@ no account and no cloud.
 ## Features
 
 - **Scan from anywhere.** You can use the live camera, a photo, a screenshot, drag and drop, or pasted text. The bundled decoder runs in every browser, including iPhone and Firefox, and works fully offline.
-- **Home Assistant app scanner.** In the Companion app, Scan uses the app's own native barcode scanner. This works even on `http://`.
-- **Batch scanning.** **Save & scan next** stores each code and goes straight back to the camera, with Undo for every code in the session.
+- **Home Assistant app scanner.** Choose batch mode before opening the native camera. Each batch save shows a visible **Saved** receipt with **Scan next**. This works even on `http://`.
+- **Batch scanning.** Off by default, with your choice remembered. In the web scanner, **Save & scan next** stores each code and returns to the camera, with Undo for every code in the session.
 - **Several codes in one photo.** Photograph a pile of labels and tick the ones to save.
 - **Duplicate detection.** The same device is never saved twice, even when you scan its QR once and type its manual code another time.
 - **Decoded for you.** For Matter you get the vendor and product (with official CSA names), passcode, discriminator and discovery modes. For Z-Wave you get the PIN, the security classes and the device name from a bundled offline database. For HomeKit you get the setup ID and accessory category.
@@ -51,8 +51,8 @@ no account and no cloud.
 A language or theme picked inside the app is remembered by that browser and takes precedence over these options.
 
 The **Documentation** tab has the full manual. The
-[project page](https://github.com/Cl3tus/Anti-Matter-HA) has more screenshots, and the
-[changelog](https://github.com/Cl3tus/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md) lists what changed in 3.0.
+[project page](https://github.com/tempeduck/Anti-Matter-HA) has more screenshots, and the
+[changelog](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md) lists what changed in 3.0.
 
 ## Credits
 
