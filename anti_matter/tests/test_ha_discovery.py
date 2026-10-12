@@ -73,9 +73,10 @@ def test_match_manual_to_qr_fills_blanks_and_preserves_all_populated_fields(clie
     assert apply(client, preview).status_code == 200
     now = client.get("/api/vault").json()["codes"][0]
     for key, value in saved.items():
-        if key not in {"qr_payload", "device_product", "area", "ha_link", "updated_at"}:
+        if key not in {"qr_payload", "device_product", "device_type", "area", "ha_link", "updated_at"}:
             assert now[key] == value, key
     assert now["qr_payload"] == MT and len(client.get("/api/vault").json()["codes"]) == 1
+    assert now["device_type"] == "switch"
 
 
 def test_linked_metadata_refresh_without_exposed_code_preserves_chosen_entity(client, app_module, monkeypatch):
@@ -283,3 +284,119 @@ def test_selected_subset_and_unknown_duplicate_ids_cannot_import_other_rows(clie
     assert apply(client, preview, [preview["rows"][0], preview["rows"][0]]).status_code == 422
     assert apply(client, preview, [preview["rows"][0]]).status_code == 200
     assert len(client.get("/api/vault").json()["codes"]) == 1
+
+
+def test_matter_vacuum_without_code_imports_metadata_and_later_fills_pairing_in_place(client, app_module, monkeypatch):
+    dev = device(name="Synthetic vacuum", integrations=["matter"],
+                 entity_ids=["sensor.vacuum_battery", "vacuum.synthetic", "update.vacuum"])
+    setup_ha(app_module, monkeypatch, devices=[dev], states=[
+        {"entity_id": "vacuum.synthetic", "state": "idle", "attributes": {"friendly_name": "Synthetic vacuum"}},
+        {"entity_id": "sensor.vacuum_battery", "state": "85"},
+    ])
+    assert client.get("/api/vault").status_code == 200
+    raw = app_module.storage.path.read_bytes()
+    preview = search(client)
+    row = preview["rows"][0]
+    assert row["status"] == "new" and row["protocol"] == "matter" and not row["has_code"]
+    assert row["entity_id"] == "vacuum.synthetic" and row["details"]["device_type"] == "vacuum"
+    assert app_module.storage.path.read_bytes() == raw
+    result = apply(client, preview)
+    assert result.status_code == 200 and result.json()["added"] == 1
+    backup = app_module.storage.data_dir / "backups" / result.json()["backup"]
+    assert backup.read_bytes() == raw
+    saved = client.get("/api/vault").json()["codes"][0]
+    assert saved["code_type"] == "matter" and saved["device_type"] == "vacuum"
+    assert saved["manual_code"] == saved["qr_payload"] == ""
+    assert saved["device_vendor"] == "Example vendor" and saved["device_product"] == "Model A"
+    assert saved["ha_link"] == {"device_id": "device-a", "entity_id": "vacuum.synthetic"}
+    assert saved["conn_matter"] is False, "Matter integration must not imply Thread"
+    assert search(client)["rows"][0]["status"] == "unchanged"
+    edited = client.put('/api/codes/' + saved['id'], json={"name": "My own name", "device_type": "My custom type", "notes": "My notes"})
+    assert edited.status_code == 200
+    setup_ha(app_module, monkeypatch, devices=[dev], states=[
+        {"entity_id": "vacuum.synthetic", "attributes": {"matter_qr_payload": MT}},
+    ])
+    assert apply(client, search(client)).status_code == 200
+    codes = client.get("/api/vault").json()["codes"]
+    assert len(codes) == 1 and codes[0]["id"] == saved["id"] and codes[0]["qr_payload"] == MT
+    assert codes[0]["name"] == "My own name" and codes[0]["device_type"] == "My custom type" and codes[0]["notes"] == "My notes"
+
+
+@pytest.mark.parametrize("integrations,z2m,protocol,code_type,standard", [
+    (["homekit_controller"], False, "homekit", "homekit", ""),
+    (["homekit"], False, "homekit", "homekit", ""),
+    (["zwave_js"], False, "zwave", "zwave", ""),
+    (["zha"], False, "zigbee", "other", "Zigbee"),
+    (["deconz"], False, "zigbee", "other", "Zigbee"),
+    (["mqtt"], True, "zigbee", "other", "Zigbee"),
+    (["tuya"], False, "tuya", "other", "Tuya"),
+    (["localtuya"], False, "tuya", "other", "Tuya"),
+    (["tuya_local"], False, "tuya", "other", "Tuya"),
+    (["mqtt"], False, "", "other", ""),
+    (["esphome"], False, "", "other", ""),
+    (["matter", "homekit_controller"], False, "", "other", ""),
+])
+def test_inventory_protocols_and_unknowns_are_selectable_without_codes(client, app_module, monkeypatch, integrations, z2m, protocol, code_type, standard):
+    setup_ha(app_module, monkeypatch, devices=[device(name="Matter HomeKit Zigbee words cannot classify me",
+        integrations=integrations, zigbee2mqtt=z2m)], states=[])
+    preview = search(client)
+    assert preview["rows"][0]["protocol"] == protocol and not preview["rows"][0]["has_code"]
+    assert preview["rows"][0]["status"] == "new"
+    assert apply(client, preview).status_code == 200
+    saved = client.get("/api/vault").json()["codes"][0]
+    assert saved["code_type"] == code_type and saved["custom_standard"] == standard
+    assert saved["manual_code"] == saved["qr_payload"] == ""
+    assert saved["conn_matter"] is False
+    assert saved["conn_zigbee"] is (protocol == "zigbee") and saved["conn_zwave"] is (protocol == "zwave")
+    assert search(client)["rows"][0]["status"] == "unchanged"
+
+
+def test_inventory_without_state_or_entity_imports_device_link_only(client, app_module, monkeypatch):
+    setup_ha(app_module, monkeypatch, devices=[device(integrations=["matter"], entity_ids=[])], states=[])
+    preview = search(client)
+    assert preview["rows"][0]["entity_id"] == ""
+    assert apply(client, preview).status_code == 200
+    saved = client.get("/api/vault").json()["codes"][0]
+    assert saved["ha_link"] == {"device_id": "device-a", "entity_id": None}
+    assert len(search(client)["rows"]) == 1
+
+
+def test_code_less_trashed_device_stays_in_trash(client, app_module, monkeypatch):
+    saved = create(client, ha_link={"device_id": "device-a"})
+    assert client.delete('/api/codes/' + saved['id']).status_code == 200
+    setup_ha(app_module, monkeypatch, devices=[device(integrations=["matter"])], states=[])
+    preview = search(client)
+    assert preview["rows"][0]["status"] == "trashed"
+    assert apply(client, preview, preview["rows"]).status_code == 422
+    assert client.get("/api/vault").json()["codes"] == []
+
+
+def test_same_name_unlinked_record_requires_linking_before_metadata_import(client, app_module, monkeypatch):
+    saved = create(client, name="Synthetic device", code_type="homekit", device_type="Custom type", notes="Preserved")
+    setup_ha(app_module, monkeypatch, devices=[device(integrations=["homekit_controller"])], states=[])
+    preview = search(client)
+    row = preview["rows"][0]
+    assert row["status"] == "conflict" and row["reason"] == "possible_existing" and row["target_id"] == saved["id"]
+    assert apply(client, preview, preview["rows"]).status_code == 422
+    assert client.put('/api/codes/' + saved['id'], json={"ha_link": {"device_id": "device-a"}}).status_code == 200
+    assert apply(client, search(client)).status_code == 200
+    codes = client.get("/api/vault").json()["codes"]
+    assert len(codes) == 1 and codes[0]["id"] == saved["id"]
+    assert codes[0]["code_type"] == "homekit" and codes[0]["device_type"] == "Custom type" and codes[0]["notes"] == "Preserved"
+
+
+def test_protocol_change_after_preview_invalidates_metadata_only_batch(client, app_module, monkeypatch):
+    setup_ha(app_module, monkeypatch, devices=[device(integrations=["matter"])], states=[])
+    preview = search(client)
+    monkeypatch.setattr(app_module.ha, "list_devices", AsyncMock(return_value=[device(integrations=["homekit_controller"])]))
+    result = apply(client, preview)
+    assert result.status_code == 409 and result.json()["detail"]["error"] == "ha_discovery_source_changed"
+    assert client.get("/api/vault").json()["codes"] == []
+    assert not list((app_module.storage.data_dir / "backups").glob("*.json"))
+
+
+def test_shared_entity_in_metadata_only_sources_is_not_imported_twice(client, app_module, monkeypatch):
+    setup_ha(app_module, monkeypatch, devices=[device(), device("device-b")], states=[])
+    preview = search(client)
+    assert all(row["status"] == "conflict" and row["reason"] == "multiple_devices" for row in preview["rows"])
+    assert apply(client, preview, preview["rows"]).status_code == 422

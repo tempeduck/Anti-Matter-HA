@@ -4,7 +4,7 @@
 
 # Anti-Matter
 
-[![Version](https://img.shields.io/badge/version-3.1.0-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.2.0-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/LICENSE)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
@@ -27,7 +27,7 @@ no account and no cloud.
 - **Cards, labels or a table.** Printable labels with the official wordmarks, flip to the decoded back, and present full screen.
 - **Organise.** Colour-and-icon categories, search, and filters for protocol, vendor, product, type, area, in use and connectivity.
 - **Home Assistant device and entity links.** Search by entity ID, fill empty vendor/product/area from HA, and refresh remaining empty fields without replacing your edits. Optionally choose an entity to show its availability in details. Jump to the device page in one tap.
-- **Search Home Assistant.** Preview exposed pairing codes and missing details on linked records, then select additions or blank-field updates. Match by HA identity or pairing code, preserve existing values, skip ambiguous and trashed records, and verify a vault backup before saving. Available in the sidebar, the phone's More menu and Import & export.
+- **Search Home Assistant.** List devices and their available details, including devices without pairing codes. Filter by protocol, select devices to include or blank-field updates, then add missing codes in the saved record. Match by HA identity or pairing code, preserve existing values, review uncertain or possible existing records, respect Trash, and verify a vault backup before saving. Available in the sidebar, the phone's More menu and Import & export.
 - **Trash, backups, export and import.** Backups can run hourly, daily, weekly or monthly, and they are also included in Home Assistant backups.
 - **Pull code from HA.** Select a device and entity in the editor, enter the pairing-code attribute name and pull it into the form. Review before saving. The integration must expose a text or integer code; linking alone cannot retrieve one.
 - **Offline backup viewer.** Download the HTML viewer from **Import & export**, open it in a browser and choose a JSON export or backup. Search records and view complete stored QR codes without Home Assistant or internet. The viewer is read-only and uploads nothing.

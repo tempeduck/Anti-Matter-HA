@@ -3,6 +3,13 @@
 Detailed per-commit history is in [git log](https://github.com/tempeduck/Anti-Matter-HA/commits/main).
 This file summarizes the notable changes by theme.
 
+## 3.2.0 — Import HA devices without pairing codes
+
+- **Search Home Assistant** lists devices even when their pairing codes are unavailable. Select devices to include with their names, manufacturer, model, room, type and HA links, then fill missing details or codes in the saved record.
+- Protocols come from HA integration information or validated exposed codes. Matter, HomeKit, Z-Wave, ZHA/deCONZ/Zigbee2MQTT and Tuya integrations are recognized. Unknown or mixed protocols remain clearly labeled for review; Matter never implies Thread connectivity.
+- Filter results by protocol or search their metadata. Existing records match by HA device/entity identity or pairing identity; only blank fields are filled. Possible same-name unlinked records require review, and Trash is respected.
+- Device enumeration includes registered entities from supported integrations even when those entities have no current state. Every selected batch retains the verified current-vault backup and stale-preview protection.
+
 ## 3.1.0 — HA discovery, code pulls and offline backup viewer
 
 - **Search Home Assistant** from the sidebar, phone More menu or Import & export. Preview exposed pairing codes and missing metadata on linked records, then apply selected additions or blank-field updates. Match by HA device/entity IDs or pairing identity, preserve populated fields and chosen entity links, and skip conflicting/ambiguous or trashed records. Repeated searches do not create duplicates. Recheck HA and the vault before saving the batch with a verified safety backup; show progress, saved counts and recoverable errors.

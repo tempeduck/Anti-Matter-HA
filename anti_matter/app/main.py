@@ -126,7 +126,7 @@ _LOGGER = logging.getLogger("anti_matter")
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-APP_VERSION = "3.1.0"
+APP_VERSION = "3.2.0"
 PORT = int(os.environ.get("ANTIMATTER_PORT", "8099"))
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -1423,7 +1423,12 @@ async def apply_ha_discovery(body: DiscoveryApplyBody):
             code = MatterCode.model_validate(data)
             code.updated_at = utc_now()
             updated += 1
-        if _find_duplicate_code(vault, code.model_dump(mode="json"), exclude_id=code.id):
+        link = code.ha_link
+        duplicate_link = any(existing.id != code.id and (
+            link.device_id and existing.ha_link.device_id == link.device_id or
+            link.entity_id and existing.ha_link.entity_id == link.entity_id
+        ) for existing in vault.codes if not existing.deleted_at)
+        if duplicate_link or _find_duplicate_code(vault, code.model_dump(mode="json"), exclude_id=code.id):
             raise _api_error(409, "ha_discovery_changed", "A matching code already exists. Search again before applying changes.")
         if row["status"] == "new":
             vault.codes.append(code)

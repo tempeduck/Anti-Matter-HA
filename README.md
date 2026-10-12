@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="anti_matter/CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.1.0-blue" alt="Version 3.0.0"></a>
+  <a href="anti_matter/CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.2.0-blue" alt="Version 3.0.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Home%20Assistant-add--on-41BDF5?logo=homeassistant&logoColor=white" alt="Home Assistant add-on">
   <img src="https://img.shields.io/badge/aarch64-yes-green" alt="Supports aarch64">
@@ -76,7 +76,7 @@ Anti-Matter keeps all of those codes in one place in Home Assistant:
 The add-on also includes:
 
 - **Home Assistant device and entity links.** Search the device picker by name or entity ID. Selecting a device fills empty vendor, product and area fields. **Refresh from HA** fills remaining empty fields without replacing your values. Optionally choose an entity to show its availability in details, and jump straight to the device page.
-- **Search Home Assistant.** Use the sidebar button, **More** on a phone, or **Import & export** to find exposed pairing codes and missing details on linked records. Review the preview and select which additions or blank-field updates to apply. Matching uses HA device/entity IDs and pairing-code identity; ambiguous matches need review. Existing values and Trash stay intact, and a verified vault backup is saved before applying the batch. HA integrations must expose their codes for discovery to find them.
+- **Search Home Assistant.** Use the sidebar button, **More** on a phone, or **Import & export** to list devices and whatever details HA provides, including devices without pairing codes. Filter by protocol and select devices to include or blank-field updates to apply. Missing codes can be added later in the saved record. Matching uses HA device/entity IDs and pairing-code identity; possible same-name unlinked records need review. Existing values and Trash stay intact, and a verified vault backup is saved before applying the batch. HA can supply a pairing code only when an integration exposes it; uncertain protocols are labeled for manual review.
 - **Trash with undo.** Deleted codes and categories wait in the Trash until you restore them or empty the bin.
 - **Scheduled backups.** Back up hourly, daily, weekly or monthly, with automatic pruning. Export and import go through one JSON file.
 - **Pull an exposed pairing code from HA.** In the editor, select a device and entity, enter the attribute name and choose **Pull code from HA**. Review the detected protocol and pairing data before **Save**. Existing pairing data requires confirmation before replacement; late responses preserve your edits. The HA integration must expose the code as a text or integer attribute. Store codes with leading zeros as text. This action reads HA and does not pair a device.

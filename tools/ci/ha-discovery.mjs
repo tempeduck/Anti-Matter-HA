@@ -18,12 +18,16 @@ const HK = "X-HM://" + packed.toString(36).toUpperCase().padStart(9, "0") + "AB1
 const dev = (id, name, entity) => ({ id, name, entity_ids: [entity], manufacturer: "Example vendor", model: "Model A", area: "Kitchen" });
 let devices = [dev("device-a", "Matter plug", "sensor.fixture_a"), dev("device-b", "HomeKit light", "sensor.fixture_b"),
   dev("device-c", "Metadata only", "switch.fixture_c"), dev("device-d", "Conflicting device", "sensor.fixture_d"),
-  dev("device-e", "No exposed code", "sensor.energy")];
+  dev("device-e", "No exposed code", "sensor.energy"),
+  { ...dev("device-vacuum", "Vacuum without pairing code", "vacuum.synthetic"), integrations: ["matter"] },
+  { ...dev("device-homekit-no-code", "HomeKit without pairing code", "light.synthetic_homekit"), integrations: ["homekit_controller"] }];
 let states = [{ entity_id: "sensor.fixture_a", attributes: { setup_code: "34970112332", qr_code: MT } },
   { entity_id: "sensor.fixture_b", attributes: { homekit_setup_uri: HK } },
   { entity_id: "switch.fixture_c", state: "on", attributes: {} },
   { entity_id: "sensor.fixture_d", attributes: { qr_code: MT } },
-  { entity_id: "sensor.energy", state: "11122333", attributes: { meter_reading: "34970112332" } }];
+  { entity_id: "sensor.energy", state: "11122333", attributes: { meter_reading: "34970112332" } },
+  { entity_id: "vacuum.synthetic", state: "idle", attributes: { friendly_name: "Vacuum without pairing code" } },
+  { entity_id: "light.synthetic_homekit", state: "off", attributes: {} }];
 let holdNextStates = false, releaseStates = null, stateReads = 0, templateReads = 0;
 const fake = http.createServer(async (request, reply) => {
   if (request.url === "/states") {
@@ -158,7 +162,52 @@ try {
     if (process.env.ARTIFACT_DIR) await phone.screenshot({ path: path.join(process.env.ARTIFACT_DIR, "discovery-phone-" + lang + ".png") });
     assert.deepEqual(phone.errors, []); await close(phone); await phone.close();
   });
-  await check("no exposed codes and no linked records gives an empty usable result", async () => {
+  await check("inventory lists code-less Matter and HomeKit devices with metadata and protocol filters", async () => {
+    const before = await vault(); await open(p);
+    const vacuum = row(p, "Vacuum without pairing code"), homekit = row(p, "HomeKit without pairing code");
+    assert.equal(await vacuum.getAttribute("data-status"), "new");
+    assert.equal(await vacuum.locator("input").isEnabled(), true);
+    assert.ok((await vacuum.textContent()).includes("Pairing code unavailable"));
+    assert.ok((await vacuum.textContent()).includes("Example vendor"));
+    assert.ok((await vacuum.textContent()).includes("vacuum.synthetic"));
+    assert.ok((await homekit.textContent()).includes("HomeKit"));
+    await p.locator("#had-protocol").selectOption("matter");
+    assert.equal(await vacuum.count(), 1); assert.equal(await homekit.count(), 0);
+    await p.locator("#had-protocol").selectOption("homekit");
+    assert.equal(await vacuum.count(), 0); assert.equal(await homekit.count(), 1);
+    await p.locator("#had-protocol").selectOption("unknown");
+    assert.equal(await row(p, "No exposed code").count(), 1);
+    assert.ok((await row(p, "No exposed code").textContent()).includes("Unknown / other"));
+    assert.deepEqual(await vault(), before); await close(p);
+  });
+  await check("selected code-less vacuum saves once and remains editable with blank pairing fields", async () => {
+    const before = await vault(), raw = fs.readFileSync(path.join(storage, "anti_matter.json"));
+    await open(p); await p.locator("#had-filter").fill("Vacuum without pairing code");
+    await p.locator("#had-select-all").check(); await p.locator("#had-apply").click(); await p.locator("#had-success").waitFor();
+    const codes = await vault(), vacuum = codes.find(c => c.ha_link.device_id === "device-vacuum");
+    assert.equal(codes.length, before.length + 1); assert.equal(vacuum.code_type, "matter");
+    assert.equal(vacuum.device_type, "vacuum"); assert.equal(vacuum.manual_code, ""); assert.equal(vacuum.qr_payload, "");
+    assert.equal(vacuum.conn_matter, false); assert.equal(vacuum.ha_link.entity_id, "vacuum.synthetic");
+    const backup = (await p.locator("#had-success").textContent()).match(/Safety backup: (\S+\.json)/)[1];
+    assert.deepEqual(fs.readFileSync(path.join(storage, "backups", backup)), raw);
+    await p.locator("#had-search-again").click(); await p.locator("#had-list").waitFor();
+    assert.equal(await row(p, "Vacuum without pairing code").getAttribute("data-status"), "unchanged");
+    await row(p, "Vacuum without pairing code").locator("button").click(); await p.locator("#ed-name").waitFor();
+    assert.equal(await p.locator("#ed-name").inputValue(), "Vacuum without pairing code");
+    assert.ok(await p.locator("#ed-name").isEditable());
+    await p.evaluate(() => AM.sheets.close(AM.sheets.top(), null, "api"));
+    assert.equal((await vault()).filter(c => c.ha_link.device_id === "device-vacuum").length, 1); assert.deepEqual(p.errors, []);
+  });
+  await check("phone inventory filters and missing-code guidance fit the screen", async () => {
+    const phone = await preparePage(390); await phone.locator("#dock-more").click();
+    await phone.locator("#more-ha-discovery").click(); await phone.locator("#had-list").waitFor();
+    await phone.locator("#had-protocol").selectOption("homekit");
+    assert.equal(await row(phone, "HomeKit without pairing code").locator("input").isEnabled(), true);
+    assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    if (process.env.ARTIFACT_DIR) await phone.screenshot({ path: path.join(process.env.ARTIFACT_DIR, "inventory-phone.png") });
+    assert.deepEqual(phone.errors, []); await close(phone); await phone.close();
+  });
+  await check("no HA devices gives an empty usable result", async () => {
     devices = []; states = []; await open(p);
     assert.equal(await p.locator(".had-row").count(), 0); assert.equal(await p.locator("#had-apply").isDisabled(), true);
     assert.ok((await p.locator("#had-list").textContent()).includes("No matching")); assert.deepEqual(p.errors, []);

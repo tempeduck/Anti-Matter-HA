@@ -18,6 +18,13 @@ CODE_ATTRIBUTES = {
     "dsk", "zwave_dsk", "smartstart", "smartstart_qr", "install_code", "zigbee_install_code",
 }
 INVALID_HK = {str(n) * 8 for n in range(10)} | {"12345678", "87654321"}
+INTEGRATION_PROTOCOLS = {
+    "matter": "matter", "homekit_controller": "homekit", "homekit": "homekit",
+    "zwave_js": "zwave", "zha": "zigbee", "deconz": "zigbee",
+    "tuya": "tuya", "localtuya": "tuya", "tuya_local": "tuya",
+}
+DEVICE_DOMAINS = ("vacuum", "lock", "cover", "climate", "fan", "light", "switch",
+                  "water_heater", "media_player", "camera")
 ZIGBEE = [
     re.compile(pattern, re.I) for pattern in (
         r"^[0-9a-f]{16}\|(?:[0-9a-f]{4}){4,9}$",
@@ -127,7 +134,17 @@ def collect_sources(devices, states, duplicate):
                     payloads.append(item)
         metadata = {key: text(dev.get(source)) for key, source in (
             ("name", "name"), ("device_vendor", "manufacturer"), ("device_product", "model"), ("area", "area"))}
-        sources[did] = {"device_id": did, "entity_ids": ids, "metadata": metadata, "payloads": payloads}
+        domains = {eid.split(".", 1)[0] for eid in ids}
+        device_type = next((domain for domain in DEVICE_DOMAINS if domain in domains), "")
+        if device_type:
+            metadata["device_type"] = device_type
+        integrations = sorted({text(domain).lower() for domain in dev.get("integrations", [])
+                               if isinstance(domain, str) and text(domain)}) if isinstance(dev.get("integrations"), list) else []
+        protocols = {INTEGRATION_PROTOCOLS[domain] for domain in integrations if domain in INTEGRATION_PROTOCOLS}
+        if dev.get("zigbee2mqtt") is True:
+            protocols.add("zigbee")
+        sources[did] = {"device_id": did, "entity_ids": ids, "metadata": metadata, "payloads": payloads,
+                        "protocols": sorted(protocols), "integrations": integrations}
     return list(sources.values())
 
 
@@ -145,31 +162,46 @@ def plan_sources(sources, vault, trash, duplicate):
         fields = payloads[0]["fields"] if len(payloads) == 1 else None
         by_code = all_duplicates(live_codes, fields, duplicate) if fields else []
         matches = {c.id: c for c in linked + by_code}
-        if not payloads and not matches:
-            continue
+        inferred = source["protocols"][0] if len(source["protocols"]) == 1 else ""
+        primary = next((eid for domain in DEVICE_DOMAINS for eid in ids if eid.startswith(domain + ".")), "")
         row = {"key": did, "name": source["metadata"]["name"] or did, "area": source["metadata"]["area"],
-               "entity_id": payloads[0]["entity_id"] if payloads else "", "attribute": payloads[0]["attribute"] if payloads else "",
-               "protocol": fields.get("custom_standard", fields["code_type"]).lower() if fields else "",
+               "entity_id": payloads[0]["entity_id"] if payloads else primary or next(iter(ids), ""),
+               "attribute": payloads[0]["attribute"] if payloads else "",
+               "protocol": fields.get("custom_standard", fields["code_type"]).lower() if fields else inferred,
+               "has_code": bool(payloads), "integrations": source["integrations"],
+               "details": source["metadata"],
                "target_id": None, "existing_name": "", "status": "conflict", "reason": "", "patch": {}}
         if len(payloads) > 1:
             row["reason"] = "multiple_codes"
         elif len(matches) > 1:
             row["reason"] = "multiple_matches"
-        elif fields and not matches and (all_duplicates(trashed_codes, fields, duplicate) or any(
+        elif not matches and ((fields and all_duplicates(trashed_codes, fields, duplicate)) or any(
             c.ha_link.device_id == did or c.ha_link.entity_id and c.ha_link.entity_id in ids for c in trashed_codes)):
             row.update(status="trashed", reason="in_trash")
         elif not matches:
-            if fields.get("uncertain"):
+            possible = [c for c in live_codes if not payloads and not c.ha_link.device_id
+                        and text(c.name).casefold() == text(source["metadata"]["name"]).casefold()]
+            if possible:
+                row["reason"] = "possible_existing"
+                if len(possible) == 1:
+                    row.update(target_id=possible[0].id, existing_name=possible[0].name)
+            elif fields and fields.get("uncertain"):
                 row["reason"] = "uncertain_protocol"
             else:
-                row.update(status="new", patch={**source["metadata"], **{k: v for k, v in fields.items() if k != "uncertain"},
-                    "ha_link": {"device_id": did, "entity_id": row["entity_id"]}})
+                identity = {k: v for k, v in fields.items() if k != "uncertain"} if fields else {
+                    "code_type": inferred if inferred in {"matter", "homekit", "zwave"} else "other",
+                    "custom_standard": {"zigbee": "Zigbee", "tuya": "Tuya"}.get(inferred, ""),
+                }
+                # The legacy conn_matter field means Thread, not the Matter protocol.
+                connectivity = {"conn_" + inferred: True} if inferred in {"zigbee", "zwave"} else {}
+                row.update(status="new", patch={**source["metadata"], **identity, **connectivity,
+                    "ha_link": {"device_id": did, "entity_id": row["entity_id"] or None}})
         else:
             existing = next(iter(matches.values()))
             row.update(target_id=existing.id, existing_name=existing.name)
-            if not row["protocol"]:
-                row["protocol"] = (existing.custom_standard or existing.code_type).lower()
-                row["entity_id"] = existing.ha_link.entity_id or ""
+            if not fields:
+                row["protocol"] = (existing.custom_standard or (existing.code_type if existing.code_type != "other" else "")).lower()
+                row["entity_id"] = existing.ha_link.entity_id or primary or next(iter(ids), "")
             has_pairing = bool(text(existing.manual_code) or text(existing.qr_payload) or text(existing.setup_id))
             conflict = existing.ha_link.device_id and existing.ha_link.device_id != did
             if fields and has_pairing and not all_duplicates([existing], fields, duplicate):
@@ -214,7 +246,9 @@ def plan_sources(sources, vault, trash, duplicate):
                 continue
             collide = a["target_id"] and a["target_id"] == b["target_id"]
             if a["status"] == b["status"] == "new":
-                collide = equivalent(a["patch"], b["patch"], duplicate)
+                link_a, link_b = a["patch"]["ha_link"], b["patch"]["ha_link"]
+                collide = equivalent(a["patch"], b["patch"], duplicate) or (
+                    link_a["entity_id"] and link_a["entity_id"] == link_b["entity_id"])
             if collide:
                 collisions.update((i, j))
     for i in collisions:
@@ -223,7 +257,7 @@ def plan_sources(sources, vault, trash, duplicate):
 
 
 def public_row(row, row_id):
-    return {key: row[key] for key in ("name", "area", "entity_id", "attribute", "protocol", "target_id", "existing_name", "status", "reason")} | {
+    return {key: row[key] for key in ("name", "area", "entity_id", "attribute", "protocol", "target_id", "existing_name", "status", "reason", "has_code", "integrations", "details")} | {
         "id": row_id, "changes": list(row["patch"]),
-        "metadata": {key: row["patch"][key] for key in ("device_vendor", "device_product", "area") if key in row["patch"]},
+        "metadata": {key: row["patch"][key] for key in ("device_vendor", "device_product", "device_type", "area") if key in row["patch"]},
     }

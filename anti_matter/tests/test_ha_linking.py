@@ -142,6 +142,24 @@ def test_devices_cache_and_explicit_refresh(monkeypatch):
     asyncio.run(run())
 
 
+def test_inventory_reader_retains_integration_hints_and_discards_raw_identifiers(monkeypatch):
+    monkeypatch.setenv("SUPERVISOR_TOKEN", "synthetic-test-token")
+    ha = HomeAssistantClient()
+    def reply(request):
+        template = json.loads(request.content)["template"]
+        assert "integration_entities('matter')" in template and "integration_entities('mqtt')" in template
+        assert "config_entry_attr(entry, 'domain')" in template
+        assert "zigbee2mqtt_" in template
+        return httpx.Response(200, json=[{**DEV, "integrations": ["mqtt", "mqtt", None],
+            "zigbee2mqtt": True, "identifiers": [["mqtt", "private-device-identifier"]]}])
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_client(
+        transport=httpx.MockTransport(reply), **kwargs))
+    result = asyncio.run(ha.list_devices(refresh=True))[0]
+    assert result["integrations"] == ["mqtt"] and result["zigbee2mqtt"] is True
+    assert "identifiers" not in result and "private-device-identifier" not in json.dumps(result)
+
+
 @pytest.mark.parametrize("payload", ["not JSON: 111-22-333", '{"private": "11122333"}'])
 def test_bad_ha_responses_never_log_body(monkeypatch, caplog, payload):
     monkeypatch.setenv("SUPERVISOR_TOKEN", "synthetic-test-token")

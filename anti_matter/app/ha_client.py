@@ -80,7 +80,7 @@ class HomeAssistantClient:
         return states
 
     async def list_devices(self, *, refresh: bool = False) -> list[dict[str, Any]]:
-        """Device identity, metadata and entity IDs for devices with a state — via the
+        """Device identity, integration domains and metadata via the
         template API's `device_id()`/`device_attr()`/`area_name()` functions (no REST
         device-registry endpoint exists). Lets the UI link to a device's own page
         (`/config/devices/device/<id>`). Entity IDs disambiguate same-named devices
@@ -100,18 +100,38 @@ class HomeAssistantClient:
         url = f"{SUPERVISOR_CORE}/template"
         template = (
             "{% set ns = namespace(ids=[], items=[]) %}"
-            "{% for eid in states | map(attribute='entity_id') %}"
+            "{% set entities = (states | map(attribute='entity_id') | list)"
+            " + integration_entities('matter') + integration_entities('homekit_controller')"
+            " + integration_entities('homekit') + integration_entities('zwave_js')"
+            " + integration_entities('zha') + integration_entities('deconz')"
+            " + integration_entities('mqtt') + integration_entities('tuya')"
+            " + integration_entities('localtuya') + integration_entities('tuya_local') %}"
+            "{% for eid in entities %}"
             "{% set did = device_id(eid) %}"
             "{% if did and did not in ns.ids %}"
             "{% set ns.ids = ns.ids + [did] %}"
             "{% endif %}"
             "{% endfor %}"
             "{% for did in ns.ids %}"
+            "{% set dn = namespace(domains=[], z2m=false) %}"
+            "{% for eid in device_entities(did) %}"
+            "{% set entry = config_entry_id(eid) %}"
+            "{% set domain = config_entry_attr(entry, 'domain') if entry else none %}"
+            "{% if domain and domain not in dn.domains %}"
+            "{% set dn.domains = dn.domains + [domain] %}"
+            "{% endif %}"
+            "{% endfor %}"
+            "{% for ident in device_attr(did, 'identifiers') or [] %}"
+            "{% if ident[0] == 'mqtt' and ident[1].startswith('zigbee2mqtt_') %}"
+            "{% set dn.z2m = true %}"
+            "{% endif %}"
+            "{% endfor %}"
             "{% set ns.items = ns.items + [{'id': did,"
             " 'name': device_attr(did, 'name_by_user') or device_attr(did, 'name') or did,"
             " 'area': area_name(did) or '',"
             " 'manufacturer': device_attr(did, 'manufacturer') or '',"
             " 'model': device_attr(did, 'model') or '',"
+            " 'integrations': (dn.domains | sort), 'zigbee2mqtt': dn.z2m,"
             " 'entity_ids': (device_entities(did) | list | sort)}] %}"
             "{% endfor %}"
             "{{ ns.items | to_json }}"
@@ -140,6 +160,10 @@ class HomeAssistantClient:
                 "model": str(d.get("model") or ""),
                 "entity_ids": sorted({eid for eid in d.get("entity_ids", []) if isinstance(eid, str) and eid})
                 if isinstance(d.get("entity_ids"), list) else [],
+                "integrations": sorted({domain for domain in d.get("integrations", [])
+                                        if isinstance(domain, str) and domain})
+                if isinstance(d.get("integrations"), list) else [],
+                "zigbee2mqtt": d.get("zigbee2mqtt") is True,
             }
             for d in devices
             if isinstance(d, dict) and d.get("id")

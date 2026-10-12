@@ -10,13 +10,18 @@
     manual_code: "code.other_manual", qr_payload: "code.other_qr", setup_id: "decode.hk_setup_id",
     code_type: "code.protocol", homekit_category: "code.homekit_category", homekit_flag: "decode.hk_flags",
     zwave_pin: "code.decode_zwave_pin", custom_standard: "code.other_standard", ha_link: "ha.discovery_link",
+    device_type: "filter.type", conn_zigbee: "code.conn_zigbee", conn_zwave: "code.conn_zwave",
   };
+  var PROTOCOLS = { matter: "Matter", homekit: "HomeKit", zwave: "Z-Wave", zigbee: "Zigbee", tuya: "Tuya" };
+  function protocolName(value) { return PROTOCOLS[value] || value || t("ha.discovery_unknown_protocol"); }
   function actionable(row) { return row.status === "new" || row.status === "update"; }
   function still(model) { return D === model && AM.sheets.isOpen(SHEET); }
   function visibleRows() {
     var q = D.query.trim().toLocaleLowerCase();
     return (D.data.rows || []).filter(function (row) {
-      return !q || [row.name, row.existing_name, row.area, row.entity_id, row.protocol].join(" ").toLocaleLowerCase().includes(q);
+      if (D.protocol !== "all" && (D.protocol === "unknown" ? !!PROTOCOLS[row.protocol] : row.protocol !== D.protocol)) return false;
+      return !q || [row.name, row.existing_name, row.area, row.entity_id, protocolName(row.protocol),
+        ...Object.values(row.details || row.metadata || {})].join(" ").toLocaleLowerCase().includes(q);
     });
   }
   function footer() {
@@ -42,12 +47,16 @@
       return h("div", { class: "had-row", "data-status": row.status }, check,
         h("div", { class: "had-row__body" },
           h("label", { class: "had-row__name", for: check.id, dir: "auto" }, row.existing_name || row.name),
-          h("span", { class: "tag" }, t(["ha", "discovery_status_" + row.status].join("."))),
-          h("span", { class: "field__hint", dir: "auto" }, [row.name, row.area, row.protocol].filter(Boolean).join(" · ")),
+          h("span", { class: "tag" }, t(row.status === "new" && !row.has_code ? "ha.discovery_new_device" : ["ha", "discovery_status_" + row.status].join("."))),
+          h("span", { class: "field__hint", dir: "auto" }, [row.name, row.area, protocolName(row.protocol)].filter(Boolean).join(" · ")),
+          h("span", { class: "field__hint had-row__pairing" }, t(row.has_code ? "ha.discovery_code_available" : "ha.discovery_code_unavailable")),
+          !row.protocol ? h("span", { class: "field__hint" }, t("ha.discovery_unknown_hint")) : null,
           row.entity_id ? h("span", { class: "field__hint had-row__entity", dir: "ltr" }, row.entity_id) : null,
           fields.length ? h("span", { class: "field__hint" }, t("ha.discovery_fields", { fields: AM.fmt.list(fields) })) : null,
-          row.metadata ? h("span", { class: "field__hint" }, AM.fmt.list(Object.keys(row.metadata).map(function (key) {
-            return t("ha.discovery_value", { field: t(FIELD_KEYS[key] || "code.device_details"), value: row.metadata[key] });
+          row.details || row.metadata ? h("span", { class: "field__hint" }, AM.fmt.list(Object.keys(row.details || row.metadata).filter(function (key) {
+            return key !== "name" && key !== "area" && (row.details || row.metadata)[key];
+          }).map(function (key) {
+            return t("ha.discovery_value", { field: t(FIELD_KEYS[key] || "code.device_details"), value: (row.details || row.metadata)[key] });
           }))) : null,
           row.reason ? h("span", { class: "field__hint field__hint--warn" }, t(["ha", "discovery_reason_" + row.reason].join("."))) : null,
           row.target_id ? h("button", { class: "btn btn--sm", type: "button", disabled: D.busy, onclick: function () {
@@ -77,13 +86,19 @@
       R.query = h("input", { class: "input", id: "had-filter", type: "search", "aria-label": t("ha.discovery_filter"), placeholder: t("ha.discovery_filter") });
       R.query.value = D.query; R.query.disabled = D.busy;
       R.query.addEventListener("input", function () { D.query = R.query.value; renderRows(); });
+      R.protocol = h("select", { class: "input", id: "had-protocol", "aria-label": t("ha.discovery_protocol_filter"), disabled: D.busy },
+        h("option", { value: "all" }, t("ha.discovery_all_protocols")),
+        Object.keys(PROTOCOLS).map(function (key) { return h("option", { value: key }, PROTOCOLS[key]); }),
+        h("option", { value: "unknown" }, t("ha.discovery_unknown_protocol")));
+      R.protocol.value = D.protocol;
+      R.protocol.addEventListener("change", function () { D.protocol = R.protocol.value; renderRows(); });
       R.all = h("input", { id: "had-select-all", type: "checkbox" });
       R.all.addEventListener("change", function () {
         visibleRows().filter(actionable).forEach(function (row) { if (R.all.checked) D.selected.add(row.id); else D.selected.delete(row.id); });
         renderRows();
       });
       R.list = h("div", { class: "had-list", id: "had-list" });
-      kids.push(R.query, h("label", { class: "had-select" }, R.all, h("span", null, t("ha.discovery_select_all"))), R.list);
+      kids.push(R.query, R.protocol, h("label", { class: "had-select" }, R.all, h("span", null, t("ha.discovery_select_all"))), R.list);
     }
     AM.fill(AM.byId("had-body"), kids);
     if (D.data) renderRows(); else footer();
@@ -92,7 +107,7 @@
     if (!D || D.busy) return;
     var model = D, request = ++D.request;
     if (D.abort) D.abort.abort();
-    D.abort = new AbortController(); D.loading = true; D.data = null; D.error = ""; D.result = null; D.selected.clear(); D.query = "";
+    D.abort = new AbortController(); D.loading = true; D.data = null; D.error = ""; D.result = null; D.selected.clear(); D.query = ""; D.protocol = "all";
     render();
     try {
       var data = await AM.api("/ha/discover", { method: "POST", signal: D.abort.signal });
@@ -123,7 +138,7 @@
   function open() {
     if (AM.sheets.isOpen(SHEET)) return true;
     if (!wired) { wired = true; AM.byId("had-apply").addEventListener("click", apply); }
-    D = { data: null, query: "", selected: new Set(), request: 0, loading: false, busy: false, error: "", result: null, abort: null };
+    D = { data: null, query: "", protocol: "all", selected: new Set(), request: 0, loading: false, busy: false, error: "", result: null, abort: null };
     render();
     AM.sheets.open(SHEET, { beforeClose: function () { return !D || !D.busy; }, onClose: function () { if (D && D.abort) D.abort.abort(); D = null; R = {}; } });
     search(); return true;
