@@ -107,6 +107,10 @@ jobs:
         working-directory: tools/ci
         env:
           PYTHON: python
+      - run: node ha-usage.mjs
+        working-directory: tools/ci
+        env:
+          PYTHON: python
 
   build:
     name: Docker build (${{ matrix.arch }})

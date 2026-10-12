@@ -4,7 +4,7 @@
 
 # Anti-Matter
 
-[![Version](https://img.shields.io/badge/version-3.2.0-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.3.0-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/LICENSE)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
@@ -27,6 +27,7 @@ no account and no cloud.
 - **Cards, labels or a table.** Printable labels with the official wordmarks, flip to the decoded back, and present full screen.
 - **Organise.** Colour-and-icon categories, search, and filters for protocol, vendor, product, type, area, in use and connectivity.
 - **Home Assistant device and entity links.** Search by entity ID, fill empty vendor/product/area from HA, and refresh remaining empty fields without replacing your edits. Optionally choose an entity to show its availability in details. Jump to the device page in one tap.
+- **Automatic In use.** Linked records are marked In use only after HA confirms a usable state. Checks run every minute; temporary outages keep the previous flag. Confirmed registry removal or explicit unlinking clears an automatic flag. Choose Manual or toggle In use in the editor to preserve your own setting. Each automatic change verifies a current-vault backup.
 - **Search Home Assistant.** List devices and their available details, including devices without pairing codes. Filter by protocol, select devices to include or blank-field updates, then add missing codes in the saved record. Match by HA identity or pairing code, preserve existing values, review uncertain or possible existing records, respect Trash, and verify a vault backup before saving. Available in the sidebar, the phone's More menu and Import & export.
 - **Trash, backups, export and import.** Backups can run hourly, daily, weekly or monthly, and they are also included in Home Assistant backups.
 - **Pull code from HA.** Select a device and entity in the editor, enter the pairing-code attribute name and pull it into the form. Review before saving. The integration must expose a text or integer code; linking alone cannot retrieve one.
@@ -66,4 +67,4 @@ add-on. Full credit to Jesse for the original Rematters add-on and its design.
 Matter, HomeKit, Z-Wave, Zigbee and Tuya are trademarks of their respective owners. They are used here only to
 identify protocols.
 
-**HA availability and connectivity.** Availability reflects the selected HA entity, not a separate network probe or a HomeKit pairing check. An app update entity describes the app, not every accessory it exports. **In use/Spare** remains your own inventory flag. The legacy JSON field `conn_matter` means **Thread**; the protocol is stored in `code_type`. Matter devices using Wi-Fi should not have Thread inferred from their protocol alone.
+**HA availability and connectivity.** Availability reflects the selected HA entity, not a separate network probe or a HomeKit pairing check. An app update entity describes the app, not every accessory it exports. **In use/Spare** can follow confirmed HA activity or your manual inventory choice; temporary unavailability does not make a deployed device Spare. The legacy JSON field `conn_matter` means **Thread**; the protocol is stored in `code_type`. Matter devices using Wi-Fi should not have Thread inferred from their protocol alone.

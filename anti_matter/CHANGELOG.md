@@ -3,6 +3,12 @@
 Detailed per-commit history is in [git log](https://github.com/tempeduck/Anti-Matter-HA/commits/main).
 This file summarizes the notable changes by theme.
 
+## 3.3.0 — Automatic In use from confirmed HA activity
+
+- Automatically mark linked records In use after HA confirms a usable entity state. Off, idle and closed are valid states; registry presence alone, unknown/unavailable, restored or optimistic states, and update/configuration entities do not confirm activity.
+- Check linked devices every minute, retain In use during outages, and clear it only after two running-HA registry checks confirm removal at least a minute apart, or after explicit unlinking. Manual choices remain available in the editor.
+- Preserve concurrent edits, deletions and links; verify an exact-current-vault backup before saving automatic flag changes. An editor left open cannot undo a newer automatic confirmation.
+
 ## 3.2.0 — Import HA devices without pairing codes
 
 - **Search Home Assistant** lists devices even when their pairing codes are unavailable. Select devices to include with their names, manufacturer, model, room, type and HA links, then fill missing details or codes in the saved record.

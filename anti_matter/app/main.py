@@ -118,6 +118,7 @@ from zwave_device_db import lookup_device as lookup_zwave_device
 from models import Vault
 from qr_svg import DEFAULT_BORDER as QR_DEFAULT_BORDER, clamp_border, qr_svg
 from storage import VaultStorage, VaultChangedError, VaultBackupError
+from ha_usage import automatic_devices, update_usage
 
 logging.basicConfig(level=logging.INFO)
 _LOGGER = logging.getLogger("anti_matter")
@@ -126,7 +127,7 @@ _LOGGER = logging.getLogger("anti_matter")
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-APP_VERSION = "3.2.0"
+APP_VERSION = "3.3.0"
 PORT = int(os.environ.get("ANTIMATTER_PORT", "8099"))
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -434,6 +435,53 @@ async def _scheduler_loop() -> None:
         await asyncio.sleep(60)
 
 
+_usage_missing: dict[str, float] = {}
+_usage_lock = asyncio.Lock()
+_usage_now = time.monotonic
+
+
+async def _sync_ha_usage() -> int:
+    """One background check; never replace user data captured before an HA await."""
+    if not ha.enabled:
+        _usage_missing.clear()
+        return 0
+    async with _usage_lock:
+        baseline = storage.load()
+        ids = automatic_devices(baseline)
+        if not ids:
+            _usage_missing.clear()
+            return 0
+        links = {code.id: code.ha_link.model_dump() for code in baseline.codes
+                 if not code.deleted_at and code.in_use_mode == "auto"}
+        try:
+            snapshot = await ha.usage_snapshot(sorted(ids))
+        except Exception:
+            _usage_missing.clear()
+            _LOGGER.warning("Automatic in-use check unavailable; flags retained")
+            return 0
+        revision = storage.revision()
+        vault = storage.load()
+        changed = update_usage(vault, links, snapshot, _usage_missing, _usage_now())
+        if changed:
+            try:
+                storage.save_with_backup(vault, revision)
+            except (VaultChangedError, VaultBackupError, OSError):
+                _LOGGER.warning("Automatic in-use update not saved; retrying later")
+                return 0
+            _LOGGER.info("Automatic in-use update: %d records", changed)
+        return changed
+
+
+async def _usage_loop() -> None:
+    while True:
+        try:
+            await _sync_ha_usage()
+        except Exception:
+            # Remote exceptions can contain sensitive HA response values.
+            _LOGGER.warning("Automatic in-use check failed; flags retained")
+        await asyncio.sleep(60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     lang = norm_language(opt("interface", "language", "auto"))
@@ -450,9 +498,13 @@ async def lifespan(app: FastAPI):
         backup_settings.get("frequency"),
         backup_settings.get("keep_count"),
     )
-    task = asyncio.create_task(_scheduler_loop())
-    yield
-    task.cancel()
+    tasks = [asyncio.create_task(_scheduler_loop()), asyncio.create_task(_usage_loop())]
+    try:
+        yield
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 app = FastAPI(title="Anti-Matter", version=APP_VERSION, lifespan=lifespan)
@@ -848,6 +900,8 @@ async def create_code(body: MatterCodeCreate):
     data = body.model_dump()
     ha_link = data.pop("ha_link", None)
     code = MatterCode(**data)
+    if "in_use" in body.model_fields_set and "in_use_mode" not in body.model_fields_set:
+        code.in_use_mode = "manual"
     _apply_code_fields(code)
     if ha_link:
         code.ha_link = HaLink.model_validate(ha_link)
@@ -868,13 +922,21 @@ async def update_code(code_id: str, body: MatterCodeUpdate):
     vault = storage.load()
     code = _find_code(vault, code_id)
     updates = body.model_dump(exclude_unset=True)
+    if "in_use" in updates and "in_use_mode" not in updates:
+        updates["in_use_mode"] = "manual"
+    # An unchanged auto flag in an older editor must not undo a background check.
+    if updates.get("in_use_mode") == "auto":
+        updates.pop("in_use", None)
     if "category_ids" in updates:
         _check_category_ids(vault, updates["category_ids"])
     ha_link = updates.pop("ha_link", None)
     for key, value in updates.items():
         setattr(code, key, value)
     if ha_link is not None:
+        prior_device = code.ha_link.device_id
         code.ha_link = HaLink.model_validate(ha_link)
+        if prior_device and prior_device != code.ha_link.device_id and code.in_use_mode == "auto":
+            code.in_use = False
     if "manual_code" in updates or "qr_payload" in updates:
         _apply_code_fields(code)
     code.updated_at = utc_now()

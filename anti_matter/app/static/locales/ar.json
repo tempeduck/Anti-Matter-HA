@@ -1274,5 +1274,11 @@
   "viewer.previous": "Previous",
   "viewer.qr_failed": "The saved payload could not be rendered as a QR. Its full text is shown below.",
   "viewer.search": "Search",
-  "viewer.title": "Backup viewer"
+  "viewer.title": "Backup viewer",
+  "ha.usage_mode": "In use tracking",
+  "ha.usage_auto": "Automatic from Home Assistant",
+  "ha.usage_manual": "Manual",
+  "ha.usage_auto_hint": "Turns on after HA confirms a usable state for the linked device. Stays on during outages; turns off after confirmed removal or unlinking. Toggling In use switches to Manual.",
+  "ha.usage_manual_hint": "Your choice is preserved. Select Automatic to let confirmed HA activity set In use.",
+  "ha.usage_link_hint": "Link a Home Assistant device to enable automatic tracking. Toggle In use to choose manually."
 }

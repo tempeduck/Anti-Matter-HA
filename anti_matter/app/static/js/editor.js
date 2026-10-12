@@ -99,6 +99,7 @@
       haPullMessage: "",
       haText: "",
       inUse: !!c.in_use,
+      inUseMode: c.in_use_mode || "auto",
       vendor: c.device_vendor || "",
       product: c.device_product || "",
       type: AM.proto.deviceType(c),
@@ -162,6 +163,7 @@
     b.description = str(m.description);
     b.notes = String(m.notes || "").trim();
     b.in_use = !!m.inUse;
+    b.in_use_mode = m.inUseMode;
     CONN_KEYS.forEach(function (k) { b[k] = !!m.conn[k]; });
     b.ha_link = { device_id: m.haId || null, entity_id: m.haId ? m.haEntity || null : null };
     var live = m.cats.filter(function (id) { return AM.cat.known(id); });
@@ -784,6 +786,7 @@
     });
   }
   function refreshHaStatus() {
+    refreshUsageControls();
     if (!R.haStatus || !R.haInput) return;
     if (R.haClear) R.haClear.hidden = !R.haInput.value;
     if (m.haId) {
@@ -932,8 +935,19 @@
   }
   function detailsBody() {
     var inUse = h("input", { type: "checkbox", class: "switch", role: "switch", id: "ed-inuse" });
+    R.inUse = inUse;
     inUse.checked = !!m.inUse;
-    inUse.addEventListener("change", function () { m.inUse = inUse.checked; markDirty(); refreshCount(); });
+    inUse.addEventListener("change", function () {
+      m.inUse = inUse.checked; m.inUseMode = "manual"; refreshUsageControls(); markDirty(); refreshCount();
+    });
+    R.inUseMode = h("select", { id: "ed-inuse-mode", class: "select" },
+      h("option", { value: "auto" }, t("ha.usage_auto")), h("option", { value: "manual" }, t("ha.usage_manual")));
+    R.inUseMode.value = m.inUseMode;
+    R.inUseMode.addEventListener("change", function () {
+      m.inUseMode = R.inUseMode.value; refreshUsageControls(); markDirty();
+    });
+    R.inUseHint = h("p", { class: "field__hint", id: "ed-inuse-hint" });
+    refreshUsageControls();
     R.vendorAside = h("span", { class: "aside autofill", hidden: !(m.autofilled.vendor || m.autofilled.product) }, icon("sparkles"), h("span", null, t("editor.from_payload")));
     R.vendor = input("ed-vendor", m.vendor, { placeholder: t("code.device_vendor_placeholder"), onInput: function (v) { m.vendor = v; m.touched.vendor = true; markDirty(); refreshCount(); refreshSuggest(); } });
     R.product = input("ed-product", m.product, { placeholder: t("code.device_product_placeholder"), onInput: function (v) { m.product = v; m.touched.product = true; markDirty(); refreshCount(); refreshSuggest(); } });
@@ -949,6 +963,7 @@
       h("label", { class: "toggle-row", for: "ed-inuse" },
         h("span", { class: "toggle-row__text" }, h("span", { class: "toggle-row__title" }, t("code.in_use")), h("span", { class: "toggle-row__desc" }, t("editor.in_use_desc"))),
         inUse),
+      field("ed-inuse-mode", t("ha.usage_mode"), R.inUseMode, { hint: R.inUseHint }),
       h("div", { class: "field-row" },
         field("ed-vendor", t("filter.vendor"), R.vendor, { aside: R.vendorAside }),
         field("ed-product", t("filter.product"), R.product, {})),
@@ -961,6 +976,12 @@
       field("ed-notes", t("code.notes"), notes, {}));
     renderAreas();
     return body;
+  }
+  function refreshUsageControls() {
+    if (!m || !R.inUseMode) return;
+    R.inUseMode.value = m.inUseMode;
+    R.inUseHint.textContent = t(m.inUseMode === "manual" ? "ha.usage_manual_hint"
+      : m.haId ? "ha.usage_auto_hint" : "ha.usage_link_hint");
   }
   function typeOptions() {
     var seen = new Set();

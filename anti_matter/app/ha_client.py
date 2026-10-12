@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, Optional
 
@@ -16,6 +17,13 @@ _LOGGER = logging.getLogger("anti_matter.ha_client")
 # list_devices runs a template over *every* HA state, so the same dialog reopening
 # shouldn't re-run it each time — cache the result briefly.
 _DEVICES_CACHE_TTL = 60.0
+_DEVICE_ID = re.compile(r"^[A-Za-z0-9_-]{1,255}$")
+_ENTITY_ID = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
+ACTIVITY_DOMAINS = (
+    "vacuum", "lock", "cover", "climate", "fan", "light", "switch", "water_heater",
+    "media_player", "camera", "sensor", "binary_sensor", "device_tracker",
+    "alarm_control_panel", "humidifier", "remote", "siren", "valve", "lawn_mower",
+)
 
 
 class HomeAssistantClient:
@@ -78,6 +86,65 @@ class HomeAssistantClient:
         if not isinstance(states, list):
             raise ValueError("Invalid HA state response")
         return states
+
+    async def usage_snapshot(self, device_ids: list[str]) -> dict[str, Any]:
+        """Fresh registry existence and usable entity IDs, without state/attribute values.
+
+        A missing state is not evidence that the device was removed. Registry
+        absence is checked separately, only while HA reports its core is running.
+        Update/configuration entities, restored and optimistic states cannot
+        confirm a physical device's activity.
+        """
+        ids = sorted(set(device_ids))
+        if not self.enabled or not ids:
+            return {"running": False, "devices": {}}
+        if any(not isinstance(did, str) or not _DEVICE_ID.fullmatch(did) for did in ids):
+            raise ValueError("Invalid HA device identity")
+        template = (
+            "{% set out = namespace(items=[]) %}"
+            "{% for did in " + json.dumps(ids) + " %}"
+            "{% set entities = device_entities(did) | list | sort %}"
+            "{% set live = namespace(ids=[]) %}"
+            "{% for eid in entities %}"
+            "{% if eid.split('.')[0] in " + json.dumps(ACTIVITY_DOMAINS) +
+            " and has_value(eid) and not state_attr(eid, 'restored')"
+            " and not state_attr(eid, 'assumed_state') %}"
+            "{% set live.ids = live.ids + [eid] %}"
+            "{% endif %}{% endfor %}"
+            "{% set out.items = out.items + [{'id': did,"
+            " 'exists': device_attr(did, 'id') == did, 'entity_ids': entities,"
+            " 'active_entity_ids': live.ids}] %}"
+            "{% endfor %}{{ out.items | to_json }}"
+        )
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            config = await client.get(f"{SUPERVISOR_CORE}/config", headers=self._headers())
+            config.raise_for_status()
+            if config.json().get("state") != "RUNNING":
+                return {"running": False, "devices": {}}
+            response = await client.post(f"{SUPERVISOR_CORE}/template", headers=self._headers(),
+                                         json={"template": template})
+            response.raise_for_status()
+            try:
+                rows = json.loads(response.text)
+            except (ValueError, TypeError):
+                raise ValueError("Invalid HA activity response") from None
+        if not isinstance(rows, list) or len(rows) != len(ids):
+            raise ValueError("Incomplete HA activity response")
+        devices = {}
+        for row in rows:
+            if not isinstance(row, dict) or row.get("id") not in ids or row["id"] in devices:
+                raise ValueError("Invalid HA activity identity")
+            entity_ids, active_ids = row.get("entity_ids"), row.get("active_entity_ids")
+            if type(row.get("exists")) is not bool or not isinstance(entity_ids, list) or not isinstance(active_ids, list):
+                raise ValueError("Invalid HA activity evidence")
+            if any(not isinstance(eid, str) or len(eid) > 255 or not _ENTITY_ID.fullmatch(eid)
+                   for eid in entity_ids + active_ids):
+                raise ValueError("Invalid HA activity entities")
+            if not set(active_ids) <= set(entity_ids) or not row["exists"] and (entity_ids or active_ids):
+                raise ValueError("Inconsistent HA activity evidence")
+            devices[row["id"]] = {"exists": row["exists"], "entity_ids": sorted(set(entity_ids)),
+                                   "active_entity_ids": sorted(set(active_ids))}
+        return {"running": True, "devices": devices}
 
     async def list_devices(self, *, refresh: bool = False) -> list[dict[str, Any]]:
         """Device identity, integration domains and metadata via the

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="anti_matter/CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.2.0-blue" alt="Version 3.0.0"></a>
+  <a href="anti_matter/CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.3.0-blue" alt="Version 3.0.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Home%20Assistant-add--on-41BDF5?logo=homeassistant&logoColor=white" alt="Home Assistant add-on">
   <img src="https://img.shields.io/badge/aarch64-yes-green" alt="Supports aarch64">
@@ -76,6 +76,7 @@ Anti-Matter keeps all of those codes in one place in Home Assistant:
 The add-on also includes:
 
 - **Home Assistant device and entity links.** Search the device picker by name or entity ID. Selecting a device fills empty vendor, product and area fields. **Refresh from HA** fills remaining empty fields without replacing your values. Optionally choose an entity to show its availability in details, and jump straight to the device page.
+- **Automatic In use.** Linked records are marked In use only after HA confirms a usable state. Checks run every minute; temporary outages keep the previous flag. Confirmed registry removal or explicit unlinking clears an automatic flag. Choose Manual or toggle In use in the editor to preserve your own setting. Each automatic change verifies a current-vault backup.
 - **Search Home Assistant.** Use the sidebar button, **More** on a phone, or **Import & export** to list devices and whatever details HA provides, including devices without pairing codes. Filter by protocol and select devices to include or blank-field updates to apply. Missing codes can be added later in the saved record. Matching uses HA device/entity IDs and pairing-code identity; possible same-name unlinked records need review. Existing values and Trash stay intact, and a verified vault backup is saved before applying the batch. HA can supply a pairing code only when an integration exposes it; uncertain protocols are labeled for manual review.
 - **Trash with undo.** Deleted codes and categories wait in the Trash until you restore them or empty the bin.
 - **Scheduled backups.** Back up hourly, daily, weekly or monthly, with automatic pruning. Export and import go through one JSON file.
@@ -83,7 +84,7 @@ The add-on also includes:
 - **Offline backup viewer.** **Import & export → Download offline backup viewer** gives you a self-contained HTML file. Open it in a browser and choose an Anti-Matter JSON export or backup to search records, read metadata and display stored QR codes without HA or internet. Current and 2.x exports are supported. Nothing is uploaded or saved by the viewer; manual-only records do not invent a QR payload.
 - **Light, dark and Invert.** The theme follows Home Assistant, and Invert shows white-on-black QR codes for dark rooms. The whole app works by keyboard, mouse and touch.
 
-**HA availability and connectivity.** Availability reflects the selected HA entity, not a separate network probe or a HomeKit pairing check. An app update entity describes the app, not every accessory it exports. **In use/Spare** remains your own inventory flag. The legacy JSON field `conn_matter` means **Thread**; the protocol is stored in `code_type`. Matter devices using Wi-Fi should not have Thread inferred from their protocol alone.
+**HA availability and connectivity.** Availability reflects the selected HA entity, not a separate network probe or a HomeKit pairing check. An app update entity describes the app, not every accessory it exports. **In use/Spare** can follow confirmed HA activity or your manual inventory choice; temporary unavailability does not make a deployed device Spare. The legacy JSON field `conn_matter` means **Thread**; the protocol is stored in `code_type`. Matter devices using Wi-Fi should not have Thread inferred from their protocol alone.
 
 ## Scanning
 
