@@ -367,8 +367,15 @@ test("choosing a photo during a Companion scan does not start a competing browse
 test("native scanner timeout removes its handler and dismisses its own scanner", async () => {
   const { page, frame } = await nativePage();
   try {
+    await frame.evaluate(() => {
+      window.scanDialogClosed = new Promise((resolve) => {
+        document.getElementById("scan-dialog").addEventListener("close", resolve, { once: true });
+      });
+    });
     await frame.click("#scan-stop");
     const code = await frame.evaluate(async () => {
+      // The dialog's queued close handler must finish before testing a new scan.
+      await window.scanDialogClosed;
       try { await AntiMatterHaScanner.scan({ title: "Synthetic", description: "Synthetic", timeoutMs: 25 }); }
       catch (err) { return err.code; }
     });
