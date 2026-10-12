@@ -45,7 +45,20 @@
 @media (max-width: 420px) { .ha-row > .icon-btn { margin-inline-start: auto; } }
 @media (max-width: 720px) {
   .detail .stage { min-block-size: 0; padding-block: 22px; }
-  .setup-code__value { font-size: 26px; }
+  .setup-code__value { --code-font-size: 26px; font-size: 26px; }
+}
+
+/* A Matter code has 13 or 25 displayed characters, including separators.
+   Fit its monospace advances, tracking and glyph-rounding allowance to the
+   actual content width; short codes keep their normal maximum size. */
+.label.p-matter .label__front, .detail.p-matter .setup-code { container-type: inline-size; }
+.label.p-matter .label__code {
+  max-inline-size: 100%;
+  font-size: min(var(--code-font-size, min(21px, calc(var(--label-w) * .088))), calc(100cqi / (var(--code-chars) * .67)));
+}
+.detail.p-matter .setup-code__value {
+  max-inline-size: 100%;
+  font-size: min(var(--code-font-size, 28px), calc(100cqi / (var(--code-chars) * .67)));
 }
 
 /* ---------- Present mode: the label as large as the screen allows ---------- */
@@ -57,7 +70,7 @@
 .present .label__head .wordmark--tuya { block-size: calc(var(--label-w) * .1); }
 .present .label__head .wordmark--text { font-size: calc(var(--label-w) * .07); }
 .present .label__head .hk-code { font-size: calc(var(--label-w) * .075); }
-.present .label__code { font-size: calc(var(--label-w) * .085); }
+.present .label__code { --code-font-size: calc(var(--label-w) * .085); font-size: calc(var(--label-w) * .085); }
 .present .label__dsk { font-size: calc(var(--label-w) * .052); }
 .present .qr-placeholder { font-size: 14px; }
 .present__stage { touch-action: pan-y; overflow: hidden; }

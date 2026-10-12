@@ -99,7 +99,7 @@
       if (g) front.appendChild(dskEl(g));
       else if (f.text) front.appendChild(h("p", { class: "label__code", dir: "ltr" }, f.text));
     } else if (p !== "homekit" || !AM.proto.homekitDigits(code)) {
-      if (f.text) front.appendChild(h("p", { class: "label__code", dir: "ltr" }, f.text));
+      if (f.text) front.appendChild(h("p", { class: "label__code", dir: "ltr", style: p === "matter" ? { "--code-chars": f.text.length } : null }, f.text));
     }
     var el = h("div", { class: ["label", "p-" + p], "data-flipped": "false", style: o.width ? { "--label-w": o.width + "px" } : null },
       h("div", { class: "label__card" }, front));
@@ -541,7 +541,7 @@
       h("span", { class: "key", style: "flex:1" }, keyText),
       f.full ? copyBtn(g ? f.full : f.copy, t("action.copy_code")) : null));
     if (g) box.appendChild(dskEl(g, "setup-code__value setup-code__value--dsk"));
-    else if (f.text) box.appendChild(h("span", { class: "setup-code__value", dir: "ltr" }, f.text));
+    else if (f.text) box.appendChild(h("span", { class: "setup-code__value", dir: "ltr", style: p === "matter" ? { "--code-chars": f.text.length } : null }, f.text));
     else box.appendChild(h("span", { class: "setup-code__none subtle" }, emptyText(code)));
     if (qr) {
       box.appendChild(h("div", { class: "setup-code__raw" },

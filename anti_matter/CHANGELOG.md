@@ -3,6 +3,11 @@
 Detailed per-commit history is in [git log](https://github.com/tempeduck/Anti-Matter-HA/commits/main).
 This file summarizes the notable changes by theme.
 
+## 3.3.1 — Fit long Matter codes to their display
+
+- Automatically size Matter setup codes to the available width, including 21-digit codes on QR labels and in the detail view's manual setup block. Keep the complete code on one line with its separators and copy value intact; resize with the display and retain the normal size for shorter codes.
+- Apply the same sizing to shared labels and full-screen presentation.
+
 ## 3.3.0 — Automatic In use from confirmed HA activity
 
 - Automatically mark linked records In use after HA confirms a usable entity state. Off, idle and closed are valid states; registry presence alone, unknown/unavailable, restored or optimistic states, and update/configuration entities do not confirm activity.
