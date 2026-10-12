@@ -99,7 +99,12 @@ class VaultStorage:
         return vault.model_dump_json(indent=2)
 
     def import_json(self, payload: str, *, merge: bool = False) -> Vault:
-        incoming = Vault.model_validate(json.loads(payload))
+        raw = json.loads(payload)
+        if not isinstance(raw, dict) or not all(
+            isinstance(raw.get(key), list) for key in ("codes", "categories")
+        ):
+            raise ValueError("Not an Anti-Matter export: codes and categories must be lists")
+        incoming = Vault.model_validate(raw)
         with self._lock:
             if merge and self.path.exists():
                 current = Vault.model_validate(

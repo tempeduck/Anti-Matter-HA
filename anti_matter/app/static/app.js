@@ -1293,6 +1293,7 @@ function openCodeDialog(code = null) {
   document.getElementById("code-device-vendor").dataset.userEdited = code?.device_vendor ? "1" : "";
   document.getElementById("code-device-product").dataset.userEdited = code?.device_product ? "1" : "";
   setVal("code-area", code?.area);
+  document.getElementById("code-area").dataset.userEdited = code?.area ? "1" : "";
   setVal("code-description", code?.description);
   const details = document.getElementById("code-details");
   if (details) {
@@ -1368,8 +1369,11 @@ function updateHaDeviceLink() {
 // the display -> id mapping unambiguous.
 function haDeviceDisplay(dev) {
   const seen = haDevices.filter((d) => d.name === dev.name);
-  if (seen.length > 1 && dev.area) return `${dev.name} — ${dev.area}`;
-  return dev.name;
+  const name = seen.length > 1 && dev.area ? `${dev.name} — ${dev.area}` : dev.name;
+  const entities = (dev.entity_ids || []).join(", ");
+  // The device ID remains a unique fallback for older API responses and devices
+  // without entities. Identical names must never map to the last device silently.
+  return `${name} — ${entities || dev.id}`;
 }
 
 async function loadHaDevices() {
@@ -1446,6 +1450,20 @@ function resolveHaDeviceInput() {
   if (!nameInput || !hidden) return;
   const id = haDisplayToId.get(nameInput.value.trim()) || "";
   hidden.value = id;
+  const device = haDeviceById.get(id);
+  if (device) {
+    for (const [fieldId, value] of [
+      ["code-device-vendor", device.manufacturer],
+      ["code-device-product", device.model],
+      ["code-area", device.area],
+    ]) {
+      const field = document.getElementById(fieldId);
+      if (field && !field.value.trim() && field.dataset.userEdited !== "1" && value) {
+        field.value = value;
+      }
+    }
+    document.getElementById("code-details")?.setAttribute("open", "");
+  }
   updateHaDeviceLink();
 }
 
@@ -1849,6 +1867,7 @@ function bindUi() {
   document.getElementById("code-zwave-dsk")?.addEventListener("input", renderZwaveDecode);
   document.getElementById("code-device-vendor")?.addEventListener("input", () => markDeviceFieldUserEdited("code-device-vendor"));
   document.getElementById("code-device-product")?.addEventListener("input", () => markDeviceFieldUserEdited("code-device-product"));
+  document.getElementById("code-area")?.addEventListener("input", () => markDeviceFieldUserEdited("code-area"));
   document.getElementById("code-other-standard")?.addEventListener("input", () => markDeviceFieldUserEdited("code-other-standard"));
   const haDeviceNameInput = document.getElementById("code-ha-device-name");
   haDeviceNameInput?.addEventListener("input", () => {
@@ -1992,15 +2011,19 @@ function bindUi() {
   document.getElementById("import-file").onchange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const text = await file.text();
     e.target.value = "";
-    const choice = await uiImportChoice();
-    if (choice === "cancel") return;
-    await api("/import", {
-      method: "POST",
-      body: JSON.stringify({ data: text, merge: choice === "merge" }),
-    });
-    await loadVault();
+    try {
+      const text = await file.text();
+      const choice = await uiImportChoice();
+      if (choice === "cancel") return;
+      await api("/import", {
+        method: "POST",
+        body: JSON.stringify({ data: text, merge: choice === "merge" }),
+      });
+      await loadVault();
+    } catch (error) {
+      await uiAlert(t("alert.import_fail", { reason: error.message || t("alert.import_retry") }));
+    }
   };
 
   document.getElementById("btn-trash").onclick = openTrashDialog;

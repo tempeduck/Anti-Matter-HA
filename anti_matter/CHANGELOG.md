@@ -3,6 +3,22 @@
 Detailed per-commit history is in [git log](https://github.com/Cl3tus/Anti-Matter-HA/commits/main).
 This file summarizes the notable changes by theme.
 
+## 2.0.6 — community fixes for mobile scanning, imports and HA linking
+
+- Use the Companion app's native QR scanner where available. Explain HTTPS and
+  permission requirements for browser cameras, and separate Take photo from
+  Choose image.
+- Retry photos with a white margin, smaller sizes, grayscale contrast and
+  inversion. Fall back to the bundled decoder when native decoding fails.
+- Cancel stale camera/photo results and release cameras that open after closing
+  the scanner. Remove temporary readers after every photo scan.
+- Show import failures, reject JSON that is not a vault export, and omit rejected
+  file contents from validation logs and error messages.
+- Show and search entity IDs in HA device suggestions. Linking fills empty
+  vendor/product/area fields and preserves entered values.
+- Add isolated API and browser regressions and a GitHub Actions test workflow.
+- Native bridge design informed by kedube's MIT-licensed upstream PR #10.
+
 ## 2.0.5 — QR photo-scan decode retry, fix Android device-link keyboard
 
 - Photo/screenshot QR scanning now retries once against a grayscale +

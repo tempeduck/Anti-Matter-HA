@@ -6,3 +6,19 @@ Thumbs.db
 *.tmp
 anti_matter.json
 backups/
+.venv/
+node_modules/
+.pytest_cache/
+screenshots/
+
+# Local-only workspace material and generated artifacts
+/AGENTS.md
+/CLAUDE.md
+/PROJECT_BRIEF.md
+/HANDOFF.md
+/handoff/
+
+# Local-only workspace material and generated artifacts
+/.venv*/
+.ruff_cache/
+*.py[cod]

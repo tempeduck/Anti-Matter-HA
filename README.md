@@ -4,9 +4,17 @@
 
 # Anti-Matter
 
-[![GitHub release](https://img.shields.io/badge/version-2.0.5-blue)](https://github.com/Cl3tus/Anti-Matter-HA)
+Community fixes maintained in [tempeduck/Anti-Matter-HA](https://github.com/tempeduck/Anti-Matter-HA),
+based on [Cl3tus/Anti-Matter-HA](https://github.com/Cl3tus/Anti-Matter-HA).
+
+Version 2.0.6 improves mobile camera and photo scanning, reports failed imports,
+and shows entity IDs and fills empty device facts when linking to Home Assistant.
+See [the fork guide](https://github.com/tempeduck/Anti-Matter-HA/blob/main/docs/community-fixes.md)
+for camera requirements, moving an existing vault, and validation commands.
+
+[![GitHub release](https://img.shields.io/badge/version-2.0.6-blue)](https://github.com/Cl3tus/Anti-Matter-HA)
 [![Project Stage](https://img.shields.io/badge/project%20stage-experimental-yellow.svg)](https://github.com/Cl3tus/Anti-Matter-HA)
-[![Maintained](https://img.shields.io/badge/maintained-yes-brightgreen.svg)](https://github.com/Cl3tus/Anti-Matter-HA/commits/main)
+[![Maintained](https://img.shields.io/badge/maintained-yes-brightgreen.svg)](https://github.com/tempeduck/Anti-Matter-HA/commits/main)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Cl3tus/Anti-Matter-HA/blob/main/LICENSE)
 
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green.svg)
@@ -16,18 +24,17 @@
 ## About
 
 A local, cloud-free vault for your **Matter**, **HomeKit** and **Z-Wave** pairing codes and
-QR payloads, running inside Home Assistant. No account, no cloud sync, no outbound
-connections — everything lives in the add-on's own config folder, reachable over SAMBA and
+QR payloads, running inside Home Assistant. No account or cloud sync — everything lives in the add-on's own config folder, reachable over SAMBA and
 included in Home Assistant's own backups.
 
 ## Install
 
-[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FCl3tus%2FHA-Addons)
+[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Ftempeduck%2FAnti-Matter-HA)
 
 1. In Home Assistant go to **Settings → Add-ons → Add-on Store → ⋮ → Repositories**.
 2. Add this repository URL:
    ```
-   https://github.com/Cl3tus/HA-Addons
+   https://github.com/tempeduck/Anti-Matter-HA
    ```
 3. Install the **Anti-Matter** add-on and start it. Open it from the sidebar (it runs through
    Home Assistant ingress).
@@ -59,7 +66,7 @@ The add-on itself lives in [`anti_matter/`](anti_matter/) — see its
 - Backup schedule (hourly/daily/weekly/monthly) with automatic pruning, plus manual
   Backup now, Export and Import.
 - NL / EN / Auto language and Light / Dark / Auto theme that follow Home Assistant.
-- No cloud, no account, no outbound connections.
+- No cloud account or vault sync. Optional Matter vendor/product name lookups contact the public CSA DCL registry.
 
 ## Screenshots
 

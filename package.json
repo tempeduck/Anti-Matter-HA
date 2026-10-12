@@ -1,0 +1,11 @@
+{
+  "name": "anti-matter-regressions",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tools/tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

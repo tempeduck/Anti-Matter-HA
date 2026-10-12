@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)" />
   <title>Anti-Matter</title>
   <link rel="icon" href="./static/assets/anti-matter-icon.png" type="image/png" />
-  <script src="./static/brand/js/theme.js?v=1.0.39"></script>
-  <link rel="stylesheet" href="./static/vendor/fonts.css?v=1.0.39" />
-  <link rel="stylesheet" href="./static/vendor/mdi/css/materialdesignicons.min.css?v=1.0.39" />
-  <link rel="stylesheet" href="./static/brand/css/tokens.css?v=1.0.39" />
-  <link rel="stylesheet" href="./static/brand/css/components.css?v=1.0.39" />
-  <link rel="stylesheet" href="./static/style.css?v=1.0.39" />
+  <script src="./static/brand/js/theme.js?v=2.0.6"></script>
+  <link rel="stylesheet" href="./static/vendor/fonts.css?v=2.0.6" />
+  <link rel="stylesheet" href="./static/vendor/mdi/css/materialdesignicons.min.css?v=2.0.6" />
+  <link rel="stylesheet" href="./static/brand/css/tokens.css?v=2.0.6" />
+  <link rel="stylesheet" href="./static/brand/css/components.css?v=2.0.6" />
+  <link rel="stylesheet" href="./static/style.css?v=2.0.6" />
 </head>
 <body>
   <header class="header">
@@ -346,10 +346,17 @@
       <button type="button" id="btn-scan-torch" class="rm-btn rm-btn-secondary scan-torch-btn hidden" aria-pressed="false" data-i18n-tip="scan.torch">
         <i class="mdi mdi-flashlight" aria-hidden="true"></i> <span data-i18n="scan.torch">Flash</span>
       </button>
-      <label class="scan-photo-label">
-        <span data-i18n="scan.photo">Or upload a photo</span>
-        <input type="file" id="scan-file-input" accept="image/*" capture="environment" />
-      </label>
+      <div class="scan-inline-row">
+        <label class="rm-btn rm-btn-secondary file-label scan-photo-label">
+          <span data-i18n="scan.take_photo">Take photo</span>
+          <input type="file" id="scan-camera-input" accept="image/*" capture="environment" hidden />
+        </label>
+        <label class="rm-btn rm-btn-secondary file-label scan-photo-label">
+          <span data-i18n="scan.upload_photo">Choose image</span>
+          <input type="file" id="scan-file-input" accept="image/*" hidden />
+        </label>
+      </div>
+      <p id="scan-file-input-error" class="form-hint scan-photo-error hidden" role="status" aria-live="polite"></p>
       <div class="dialog-actions">
         <button type="button" id="scan-stop" class="rm-btn rm-btn-secondary" data-close data-i18n="action.cancel">Close</button>
       </div>
@@ -507,17 +514,18 @@
   </dialog>
 
   <script>window.ANTIMATTER_LOCALE_BASE = "./static/locales/";</script>
-  <script src="./static/brand/js/i18n.js?v=1.0.39"></script>
-  <script src="./static/brand/js/homekit-payload.js?v=1.0.39"></script>
-  <script src="./static/brand/js/zwave-payload.js?v=1.0.39"></script>
-  <script src="./static/brand/js/matter-setup-payload.js?v=1.0.39"></script>
-  <script src="./static/brand/js/matter-scan.js?v=1.0.39"></script>
-  <script src="./static/brand/js/matter-scanner.js?v=1.0.39"></script>
-  <script src="./static/brand/js/vault-scan-ui.js?v=1.0.39"></script>
-  <script src="./static/brand/js/category-color-picker.js?v=1.0.39"></script>
-  <script src="./static/brand/js/category-icons.js?v=1.0.39"></script>
-  <script src="./static/brand/js/vault-cards.js?v=1.0.39"></script>
-  <script src="./static/brand/js/vault-share-ui.js?v=1.0.39"></script>
-  <script src="./static/app.js?v=1.0.39"></script>
+  <script src="./static/brand/js/i18n.js?v=2.0.6"></script>
+  <script src="./static/brand/js/homekit-payload.js?v=2.0.6"></script>
+  <script src="./static/brand/js/zwave-payload.js?v=2.0.6"></script>
+  <script src="./static/brand/js/matter-setup-payload.js?v=2.0.6"></script>
+  <script src="./static/brand/js/matter-scan.js?v=2.0.6"></script>
+  <script src="./static/brand/js/ha-scanner.js?v=2.0.6"></script>
+  <script src="./static/brand/js/matter-scanner.js?v=2.0.6"></script>
+  <script src="./static/brand/js/vault-scan-ui.js?v=2.0.6"></script>
+  <script src="./static/brand/js/category-color-picker.js?v=2.0.6"></script>
+  <script src="./static/brand/js/category-icons.js?v=2.0.6"></script>
+  <script src="./static/brand/js/vault-cards.js?v=2.0.6"></script>
+  <script src="./static/brand/js/vault-share-ui.js?v=2.0.6"></script>
+  <script src="./static/app.js?v=2.0.6"></script>
 </body>
 </html>

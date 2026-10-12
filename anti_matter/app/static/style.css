@@ -1674,12 +1674,11 @@ body.qr-invert #quickview-image-wrap {
   position: relative;
 }
 .ha-device-suggestions {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
+  /* Keep suggestions inside the form's scrollable height. An absolutely
+     positioned list at the final field is clipped by the dialog. */
+  position: relative;
   z-index: 30;
-  margin: 0;
+  margin: 4px 0 0;
   padding: var(--rm-space-2);
   list-style: none;
   max-height: 12rem;

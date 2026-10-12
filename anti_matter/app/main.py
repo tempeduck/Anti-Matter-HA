@@ -63,7 +63,7 @@ _LOGGER = logging.getLogger("anti_matter")
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-APP_VERSION = "2.0.5"
+APP_VERSION = "2.0.6"
 PORT = int(os.environ.get("ANTIMATTER_PORT", "8099"))
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -420,9 +420,14 @@ async def export_vault():
 async def import_vault(body: ImportBody):
     try:
         vault = storage.import_json(body.data, merge=body.merge)
-    except Exception as exc:
-        _LOGGER.warning("Vault import failed (merge=%s): %s", body.merge, exc)
-        raise HTTPException(400, f"Invalid JSON: {exc}") from exc
+    except (ValueError, TypeError) as exc:
+        # Validation errors can include the rejected pairing code. Keep both the
+        # log and the browser message free of the contents of an imported file.
+        _LOGGER.warning("Vault import rejected (merge=%s)", body.merge)
+        raise HTTPException(400, "Invalid Anti-Matter export. Choose a JSON export made with Anti-Matter.") from exc
+    except OSError as exc:
+        _LOGGER.error("Could not write imported vault (merge=%s)", body.merge)
+        raise HTTPException(500, "Could not write the imported vault. Please try again.") from exc
     _LOGGER.info(
         "Vault imported (merge=%s): now %d codes, %d categories",
         body.merge, len(vault.codes), len(vault.categories),
@@ -871,9 +876,7 @@ async def zwave_device_info(manufacturer_id: int, product_type: int, product_id:
 
 @app.get("/api/ha/devices")
 async def ha_devices():
-    """[{id, name}] for every HA device — populates the device-picker in the code
-    dialog so ha_link stores a device_id directly (linking to its own HA page),
-    with no entity_id involved."""
+    """Device names, entity IDs and facts for linking and filling empty fields."""
     return await ha.list_devices()
 
 

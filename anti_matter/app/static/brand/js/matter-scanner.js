@@ -7,8 +7,11 @@
   let html5Instance = null;
   let currentTrack = null;
   let torchIsOn = false;
+  let cameraGeneration = 0;
+  let libraryPromise = null;
 
   async function stopCamera() {
+    cameraGeneration++;
     if (scanTimerId) {
       clearTimeout(scanTimerId);
       scanTimerId = null;
@@ -18,25 +21,27 @@
     // reloads it, which looks like the whole page crashed right after a scan
     // (torch off -> stop is the safe order; stop -> torch off is not, on those
     // devices). Always turn it off first and wait for it to actually apply.
-    if (currentTrack && torchIsOn) {
+    const track = currentTrack;
+    const oldStream = stream;
+    const oldHtml5 = html5Instance;
+    const hadTorch = torchIsOn;
+    currentTrack = null;
+    stream = null;
+    html5Instance = null;
+    torchIsOn = false;
+    if (track && hadTorch) {
       try {
-        await currentTrack.applyConstraints({ advanced: [{ torch: false }] });
+        await track.applyConstraints({ advanced: [{ torch: false }] });
       } catch {
         /* best effort */
       }
-      torchIsOn = false;
     }
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-      stream = null;
+    if (oldStream) {
+      oldStream.getTracks().forEach((t) => t.stop());
     }
-    currentTrack = null;
-    if (html5Instance) {
-      html5Instance
-        .stop()
-        .then(() => html5Instance.clear())
-        .catch(() => {});
-      html5Instance = null;
+    if (oldHtml5) {
+      try { await oldHtml5.stop(); } catch { /* not started yet */ }
+      await safeClear(oldHtml5);
     }
   }
 
@@ -115,12 +120,12 @@
     frameEl.classList.remove("hidden");
   }
 
-  async function scanWithBarcodeDetector(video, onScan, frameEl) {
+  async function scanWithBarcodeDetector(video, onScan, frameEl, generation) {
     const detector = new global.BarcodeDetector({ formats: ["qr_code"] });
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const tick = async () => {
-      if (!stream) return;
+      if (!stream || generation !== cameraGeneration) return;
       try {
         if (video.videoWidth > 0) {
           const scale = Math.min(1, DETECT_MAX_DIM / Math.max(video.videoWidth, video.videoHeight));
@@ -128,6 +133,7 @@
           canvas.height = Math.round(video.videoHeight * scale);
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const codes = await detector.detect(canvas);
+          if (generation !== cameraGeneration) return;
           if (codes.length > 0 && codes[0].rawValue) {
             const rect = mapBoxToDisplay(codes[0].boundingBox, canvas, video);
             showDetectFrame(frameEl, rect);
@@ -135,9 +141,10 @@
             // Briefly show the detected-code box (like a phone's native camera
             // scanner) before tearing the camera down, so a successful read is
             // visibly confirmed rather than the view just vanishing.
-            setTimeout(async () => {
+            scanTimerId = setTimeout(async () => {
+              if (generation !== cameraGeneration) return;
               await stopCamera();
-              onScan(text);
+              if (cameraGeneration === generation + 1) onScan(text);
             }, 180);
             return;
           }
@@ -145,7 +152,7 @@
       } catch {
         /* skip frame */
       }
-      scanTimerId = setTimeout(tick, SCAN_INTERVAL_MS);
+      if (generation === cameraGeneration) scanTimerId = setTimeout(tick, SCAN_INTERVAL_MS);
     };
     scanTimerId = setTimeout(tick, SCAN_INTERVAL_MS);
   }
@@ -229,7 +236,7 @@
     });
   }
 
-  async function startNativeCamera(containerId, onScan, onError, onReady) {
+  async function startNativeCamera(containerId, onScan, onError, onReady, generation) {
     const container = document.getElementById(containerId);
     if (!container) {
       onError(new Error("Scanner container not found"));
@@ -247,7 +254,7 @@
     container.appendChild(frameEl);
 
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      const acquired = await navigator.mediaDevices.getUserMedia({
         // Most phone cameras default to 1080p+ (some go much higher with
         // continuous autofocus engaged) — none of that extra resolution helps
         // reading a QR code, it just means more pixels to push through detect()
@@ -255,48 +262,52 @@
         video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
+      if (generation !== cameraGeneration) {
+        acquired.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      stream = acquired;
     } catch (e) {
-      onError(e);
+      if (generation === cameraGeneration) onError(e);
       return;
     }
     video.srcObject = stream;
     await video.play();
+    if (generation !== cameraGeneration) return;
     const track = stream.getVideoTracks()[0];
     currentTrack = track || null;
     if (track) wirePinchZoomAndTapFocus(video, track);
     if (typeof onReady === "function") onReady();
-    await scanWithBarcodeDetector(video, onScan, frameEl);
+    await scanWithBarcodeDetector(video, onScan, frameEl, generation);
   }
 
   function loadScript(url) {
-    return new Promise((resolve, reject) => {
-      if (global.Html5Qrcode) {
-        resolve();
-        return;
-      }
-      const existing = document.querySelector(`script[data-antimatter-scanner="${url}"]`);
-      if (existing) {
-        existing.addEventListener("load", () => resolve());
-        existing.addEventListener("error", () => reject(new Error("Scanner library failed to load")));
-        return;
-      }
+    if (global.Html5Qrcode) return Promise.resolve();
+    if (libraryPromise) return libraryPromise;
+    libraryPromise = new Promise((resolve, reject) => {
       const s = document.createElement("script");
       s.src = url;
       s.async = true;
       s.dataset.antimatterScanner = url;
       s.onload = () => resolve();
-      s.onerror = () => reject(new Error("Scanner library failed to load"));
+      s.onerror = () => {
+        s.remove();
+        libraryPromise = null;
+        reject(new Error("Scanner library failed to load"));
+      };
       document.head.appendChild(s);
     });
+    return libraryPromise;
   }
 
-  async function startHtml5Camera(containerId, libUrl, onScan, onError) {
+  async function startHtml5Camera(containerId, libUrl, onScan, onError, generation) {
     try {
       await loadScript(libUrl);
     } catch (e) {
-      onError(e);
+      if (generation === cameraGeneration) onError(e);
       return;
     }
+    if (generation !== cameraGeneration) return;
     const container = document.getElementById(containerId);
     if (!container) {
       onError(new Error("Scanner container not found"));
@@ -309,24 +320,28 @@
     div.className = "scan-reader-mount";
     container.appendChild(div);
 
-    html5Instance = new global.Html5Qrcode(readerId);
-    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-    const cameras = await global.Html5Qrcode.getCameras();
-    const cam =
-      cameras.find((c) => /back|rear|environment/i.test(c.label)) || cameras[0];
-    if (!cam) {
-      onError(new Error("No camera found"));
-      return;
-    }
-    await html5Instance.start(
-      cam.id,
+    const instance = new global.Html5Qrcode(readerId);
+    html5Instance = instance;
+    const config = { fps: 10, qrbox: (width, height) => {
+      const size = Math.max(1, Math.min(250, Math.floor(Math.min(width, height) * 0.8)));
+      return { width: size, height: size };
+    } };
+    // Request the rear camera directly. Enumerating first can require a second
+    // permission prompt and returns unlabelled cameras on mobile WebViews.
+    await instance.start(
+      { facingMode: "environment" },
       config,
-      (text) => {
-        stopCamera();
-        onScan(text);
+      async (text) => {
+        if (generation !== cameraGeneration) return;
+        await stopCamera();
+        if (cameraGeneration === generation + 1) onScan(text);
       },
       () => {}
     );
+    if (generation !== cameraGeneration) {
+      try { await instance.stop(); } catch { /* already stopped */ }
+      await safeClear(instance);
+    }
   }
 
   // Html5Qrcode.clear() doesn't reliably return a Promise (some code paths return
@@ -344,133 +359,128 @@
     }
   }
 
-  // Screenshots/copies (esp. iPhone screenshot -> iMac) can bake in a faint grey
-  // cast instead of true white — invisible to the eye but enough to break a
-  // decoder's black/white threshold. Both decode paths below try the image as-is
-  // first, then retry once against a grayscale + contrast-stretched version before
-  // giving up, since that's cheap and fixes exactly this failure mode.
   const MAX_PREPROCESS_DIM = 1800;
+  let photoId = 0;
 
-  function grayscaleContrastCanvas(bitmap) {
-    const scale = Math.min(1, MAX_PREPROCESS_DIM / Math.max(bitmap.width, bitmap.height));
+  async function loadPhoto(file) {
+    try {
+      if (typeof global.createImageBitmap === "function") return await global.createImageBitmap(file);
+    } catch { /* Safari may support <img> for formats its bitmap API rejects. */ }
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      return image;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  function photoCanvas(image, scale, mode) {
+    const factor = Math.min(1, MAX_PREPROCESS_DIM / Math.max(image.width, image.height)) * scale;
+    const width = Math.max(1, Math.round(image.width * factor));
+    const height = Math.max(1, Math.round(image.height * factor));
+    // A QR decoder needs a quiet zone, including when a photo was cropped tightly.
+    const border = Math.max(24, Math.round(Math.min(width, height) * 0.08));
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imgData.data;
-    const luma = new Uint8ClampedArray(data.length / 4);
-    let min = 255;
-    let max = 0;
-    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-      const l = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      luma[j] = l;
-      if (l < min) min = l;
-      if (l > max) max = l;
+    canvas.width = width + border * 2;
+    canvas.height = height + border * 2;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, border, border, width, height);
+    if (mode !== "color") {
+      const pixels = ctx.getImageData(border, border, width, height);
+      const data = pixels.data;
+      const luma = new Uint8ClampedArray(width * height);
+      let min = 255;
+      let max = 0;
+      for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+        const value = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+        luma[j] = value;
+        min = Math.min(min, value);
+        max = Math.max(max, value);
+      }
+      const range = max - min || 1;
+      for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+        let value = Math.round(((luma[j] - min) / range) * 255);
+        if (mode === "invert") value = 255 - value;
+        data[i] = data[i + 1] = data[i + 2] = value;
+      }
+      ctx.putImageData(pixels, border, border);
     }
-    const range = max - min || 1;
-    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-      const v = Math.round(((luma[j] - min) / range) * 255);
-      data[i] = v;
-      data[i + 1] = v;
-      data[i + 2] = v;
-    }
-    ctx.putImageData(imgData, 0, 0);
     return canvas;
   }
 
   async function scanImageFile(file, onScan, onError, libUrl) {
-    let bitmap = null;
+    let image = null;
+    let mount = null;
+    let detector = null;
+    let fallbackReady = false;
     try {
-      bitmap = await createImageBitmap(file);
-    } catch {
-      /* fall through — raw decode attempts below still get the original file */
-    }
+      try { image = await loadPhoto(file); } catch { /* Try the original file below. */ }
+      try {
+        if (typeof global.BarcodeDetector === "function") {
+          detector = new global.BarcodeDetector({ formats: ["qr_code"] });
+        }
+      } catch { /* Some native detectors exist but do not support QR. */ }
 
-    if ("BarcodeDetector" in global) {
-      const detector = new global.BarcodeDetector({ formats: ["qr_code"] });
-      try {
-        const codes = await detector.detect(bitmap || file);
-        if (codes.length > 0 && codes[0].rawValue) {
-          bitmap?.close();
-          onScan(codes[0].rawValue);
-          return;
+      async function decode(source, fileLike) {
+        if (detector && source) {
+          try {
+            const codes = await detector.detect(source);
+            const found = codes.find((code) => code.rawValue);
+            if (found) return found.rawValue;
+          } catch { /* Native decoding must not prevent the bundled fallback. */ }
         }
-      } catch (e) {
-        bitmap?.close();
-        onError(e);
-        return;
-      }
-      if (bitmap) {
-        try {
-          const codes = await detector.detect(grayscaleContrastCanvas(bitmap));
-          if (codes.length > 0 && codes[0].rawValue) {
-            bitmap.close();
-            onScan(codes[0].rawValue);
-            return;
-          }
-        } catch {
-          /* ignore — report the generic "not found" below */
-        }
-      }
-      bitmap?.close();
-      onError(new Error("No QR code found in image"));
-      return;
-    }
-    // Fallback for browsers without BarcodeDetector (e.g. iOS Safari): html5-qrcode scanFile.
-    if (libUrl) {
-      let inst = null;
-      const tmpId = "antimatter-file-scan-tmp";
-      const scanWith = async (fileLike) => {
-        try {
+        if (!libUrl) return null;
+        if (!fallbackReady) {
           await loadScript(libUrl);
-          let div = document.getElementById(tmpId);
-          if (!div) {
-            div = document.createElement("div");
-            div.id = tmpId;
-            div.style.display = "none";
-            document.body.appendChild(div);
-          }
-          inst = new global.Html5Qrcode(tmpId);
-          const text = await inst.scanFile(fileLike, false);
-          await safeClear(inst);
-          return text || null;
-        } catch (e) {
-          await safeClear(inst);
-          throw e;
+          mount = document.createElement("div");
+          mount.id = `antimatter-file-scan-${++photoId}`;
+          mount.style.display = "none";
+          document.body.appendChild(mount);
+          fallbackReady = true;
         }
-      };
-      let firstErr = null;
-      try {
-        const text = await scanWith(file);
-        if (text) {
-          onScan(text);
-          return;
-        }
-      } catch (e) {
-        firstErr = e;
-      }
-      if (bitmap) {
+        const instance = new global.Html5Qrcode(mount.id);
         try {
-          const blob = await new Promise((resolve) =>
-            grayscaleContrastCanvas(bitmap).toBlob(resolve, "image/png")
-          );
-          if (blob) {
-            const text = await scanWith(new File([blob], "processed.png", { type: "image/png" }));
-            if (text) {
-              onScan(text);
-              return;
-            }
-          }
-        } catch (e) {
-          firstErr = firstErr || e;
+          return (await instance.scanFile(fileLike, false)) || null;
+        } catch { return null; }
+        finally { await safeClear(instance); }
+      }
+
+      let text = await decode(image, file);
+      // Generate one bounded image at a time. Scale and the white margin matter
+      // as well as contrast; forcing the original photo to B&W is not sufficient.
+      const variants = [
+        [1, "color"], [0.5, "color"], [0.35, "color"],
+        [1, "contrast"], [0.5, "contrast"], [0.35, "contrast"],
+        [0.5, "invert"], [0.35, "invert"],
+      ];
+      if (!text && image) {
+        for (const [scale, mode] of variants) {
+          const canvas = photoCanvas(image, scale, mode);
+          const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+          if (!blob) continue;
+          text = await decode(canvas, new File([blob], "processed.png", { type: "image/png" }));
+          if (text) break;
         }
       }
-      onError(firstErr || new Error("No QR code found in image"));
-      return;
+      if (text) await onScan(text);
+      else {
+        const error = new Error("No QR code found in image");
+        error.code = image ? "qr_not_found" : "image_unreadable";
+        onError(error);
+      }
+    } catch {
+      const error = new Error("Photo scanner unavailable");
+      error.code = "decoder_unavailable";
+      onError(error);
+    } finally {
+      image?.close?.();
+      mount?.remove();
     }
-    onError(new Error("Photo scan not supported in this browser"));
   }
 
   /**
@@ -484,17 +494,32 @@
    *   actually be feature-detected against the real MediaStreamTrack.
    */
   async function startCamera(opts) {
-    stopCamera();
+    const generation = cameraGeneration + 1;
+    await stopCamera();
+    if (generation !== cameraGeneration) return;
     const { containerId, libUrl, onScan, onError, onReady } = opts;
-    if ("BarcodeDetector" in global) {
-      await startNativeCamera(containerId, onScan, onError, onReady);
-      return;
+    try {
+      let nativeAvailable = false;
+      if (typeof global.BarcodeDetector === "function") {
+        try {
+          new global.BarcodeDetector({ formats: ["qr_code"] });
+          nativeAvailable = true;
+        } catch { /* Fall back when QR is unsupported by the native detector. */ }
+      }
+      if (nativeAvailable) {
+        await startNativeCamera(containerId, onScan, onError, onReady, generation);
+        return;
+      }
+      if (libUrl) {
+        await startHtml5Camera(containerId, libUrl, onScan, onError, generation);
+        return;
+      }
+      throw new Error("Camera scanning is not supported in this browser");
+    } catch (error) {
+      if (generation !== cameraGeneration) return;
+      await stopCamera();
+      onError(error);
     }
-    if (libUrl) {
-      await startHtml5Camera(containerId, libUrl, onScan, onError);
-      return;
-    }
-    onError(new Error("Camera scanning is not supported in this browser"));
   }
 
   global.AntiMatterScanner = {

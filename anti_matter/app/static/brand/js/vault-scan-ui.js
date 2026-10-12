@@ -26,6 +26,8 @@
     const readerId = "scan-reader";
     const uiAlert = opts.uiAlert || ((msg) => Promise.resolve(window.alert(msg)));
     const uiConfirm = opts.uiConfirm || ((msg) => Promise.resolve(window.confirm(msg)));
+    let scanGeneration = 0;
+    let photoGeneration = 0;
 
     // Consecutive scans without a custom name would all collide on the same
     // "Scanned device" default — number them so each saved scan stays distinct.
@@ -90,7 +92,9 @@
     }
 
     async function handleParsedText(text) {
-      const parsed = global.AntiMatterScan.parseScannedText(text);
+      let parsed;
+      try { parsed = global.AntiMatterScan.parseScannedText(text); }
+      catch { /* Malformed payloads should show a user-facing error. */ }
       if (!parsed) {
         await uiAlert(t("scan.unrecognized"));
         global.logEvent?.("Scan: unrecognized code");
@@ -149,13 +153,39 @@
       torchBtn.setAttribute("aria-pressed", String(torchOn));
     });
 
-    function openScanDialog() {
+    async function openScanDialog() {
       if (!scanDlg) return;
+      const generation = ++scanGeneration;
       scanDlg.showModal();
       resetTorchButton();
       const hint = document.getElementById("scan-hint");
+      if (hint) hint.textContent = t("scan.starting");
+      const native = global.AntiMatterHaScanner;
+      if (native && await native.ready()) {
+        if (!scanDlg.open || generation !== scanGeneration) return;
+        if (hint) hint.textContent = t("scan.hint_native");
+        try {
+          const text = await native.scan({
+            title: t("scan.title"), description: t("scan.hint_native"),
+            alternativeOptionLabel: t("scan.upload_photo"),
+          });
+          if (scanDlg.open && generation === scanGeneration) await handleParsedText(text);
+          return;
+        } catch (error) {
+          if (!scanDlg.open || generation !== scanGeneration) return;
+          if (error.code === "closed" || error.code === "replaced") return;
+          if (error.code === "aborted") { closeScanDialog(); return; }
+          if (error.code === "alternative") {
+            if (hint) hint.textContent = t("scan.hint_photo");
+            return;
+          }
+        }
+      }
+      if (!scanDlg.open || generation !== scanGeneration) return;
       if (hint) {
-        hint.textContent = global.AntiMatterScanner.supportsNativeScan()
+        hint.textContent = !global.isSecureContext
+          ? t("scan.https_required")
+          : global.AntiMatterScanner.supportsNativeScan()
           ? t("scan.hint_native")
           : global.AntiMatterScanner.supportsCamera()
             ? t("scan.hint_fallback")
@@ -170,8 +200,9 @@
           libUrl: opts.libUrl,
           onScan: handleParsedText,
           onError: (err) => {
-            console.warn("scan", err);
-            if (hint) hint.textContent = t("scan.camera_denied");
+            if (!scanDlg.open || generation !== scanGeneration) return;
+            if (hint) hint.textContent = !global.isSecureContext
+              ? t("scan.https_required") : t("scan.camera_denied");
           },
           onReady: updateTorchButtonVisibility,
         });
@@ -179,6 +210,9 @@
     }
 
     function closeScanDialog() {
+      scanGeneration++;
+      photoGeneration++;
+      global.AntiMatterHaScanner?.close();
       global.AntiMatterScanner.stopCamera();
       const el = document.getElementById(readerId);
       if (el) el.innerHTML = "";
@@ -197,10 +231,26 @@
       document.getElementById(id)?.addEventListener("click", openScanDialog);
     }
     document.getElementById("scan-stop")?.addEventListener("click", closeScanDialog);
-    scanDlg?.addEventListener("close", () => global.AntiMatterScanner.stopCamera());
+    scanDlg?.addEventListener("close", () => {
+      if (scanDlg.open) return;
+      scanGeneration++;
+      photoGeneration++;
+      global.AntiMatterHaScanner?.close();
+      global.AntiMatterScanner.stopCamera();
+    });
+    document.getElementById("code-dialog")?.addEventListener("close", (event) => {
+      if (!event.target.open) photoGeneration++;
+    });
+    global.addEventListener("pagehide", () => {
+      scanGeneration++;
+      photoGeneration++;
+      global.AntiMatterHaScanner?.close();
+      global.AntiMatterScanner.stopCamera();
+    });
 
     const fileInputIds = [
       "scan-file-input",
+      "scan-camera-input",
       "scan-file-in-form",
       "scan-file-homekit",
       "scan-file-zwave",
@@ -209,8 +259,8 @@
     for (const fid of fileInputIds) {
       const input = document.getElementById(fid);
       if (!input) continue;
-      const errorEl = document.getElementById(`${fid}-error`);
-      input.addEventListener("change", (e) => {
+      const errorEl = document.getElementById(`${fid === "scan-camera-input" ? "scan-file-input" : fid}-error`);
+      input.addEventListener("change", async (e) => {
         const file = e.target.files?.[0];
         e.target.value = "";
         if (errorEl) {
@@ -218,11 +268,31 @@
           errorEl.classList.add("hidden");
         }
         if (!file) return;
-        global.AntiMatterScanner.scanImageFile(
+        const generation = ++photoGeneration;
+        const originatingDialog = input.closest("dialog");
+        const stillActive = () => generation === photoGeneration && originatingDialog?.open;
+        const showStatus = (text) => {
+          if (!stillActive()) return;
+          if (errorEl) {
+            errorEl.textContent = text;
+            errorEl.classList.toggle("hidden", !text);
+          }
+        };
+        global.AntiMatterHaScanner?.close();
+        await global.AntiMatterScanner.stopCamera();
+        if (!stillActive()) return;
+        showStatus(t("scan.processing"));
+        await global.AntiMatterScanner.scanImageFile(
           file,
-          handleParsedText,
+          async (text) => {
+            if (!stillActive()) return;
+            showStatus("");
+            await handleParsedText(text);
+          },
           (err) => {
-            const msg = err.message || t("scan.photo_fail");
+            if (!stillActive()) return;
+            const msg = t(err.code === "image_unreadable" ? "scan.image_unreadable"
+              : err.code === "decoder_unavailable" ? "scan.decoder_unavailable" : "scan.photo_fail");
             // The 3 upload buttons embedded in the code form show the error inline
             // right under the button — a modal alert() here was easy to miss (or,
             // before a matter-scanner.js bug fix, never even appeared) while heads-down

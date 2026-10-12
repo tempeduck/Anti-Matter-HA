@@ -22,7 +22,7 @@ class HomeAssistantClient:
     def __init__(self) -> None:
         self.token = os.environ.get("SUPERVISOR_TOKEN", "")
         self.enabled = bool(self.token)
-        self._devices_cache: Optional[list[dict[str, str]]] = None
+        self._devices_cache: Optional[list[dict[str, Any]]] = None
         self._devices_cache_at = 0.0
 
     def _headers(self) -> dict[str, str]:
@@ -67,8 +67,8 @@ class HomeAssistantClient:
             ids = [e for e in ids if e.startswith(prefix)]
         return sorted(ids)
 
-    async def list_devices(self) -> list[dict[str, str]]:
-        """[{id, name, area}] for every HA device with at least one entity — via the
+    async def list_devices(self) -> list[dict[str, Any]]:
+        """Device names, entities and facts for devices with at least one state — via the
         template API's `device_id()`/`device_attr()`/`area_name()` functions (no REST
         device-registry endpoint exists). Lets the UI link to a device's own page
         (`/config/devices/device/<id>`) without ever needing an entity_id itself, and
@@ -97,7 +97,10 @@ class HomeAssistantClient:
             "{% for did in ns.ids %}"
             "{% set ns.items = ns.items + [{'id': did,"
             " 'name': device_attr(did, 'name_by_user') or device_attr(did, 'name') or did,"
-            " 'area': area_name(did) or ''}] %}"
+            " 'area': area_name(did) or '',"
+            " 'manufacturer': device_attr(did, 'manufacturer') or '',"
+            " 'model': device_attr(did, 'model') or '',"
+            " 'entity_ids': (device_entities(did) | list | sort)}] %}"
             "{% endfor %}"
             "{{ ns.items | to_json }}"
         )
@@ -112,7 +115,7 @@ class HomeAssistantClient:
         try:
             devices = json.loads(raw)
         except (ValueError, TypeError):
-            _LOGGER.warning("list_devices: HA returned non-JSON template result: %r", raw[:300])
+            _LOGGER.warning("list_devices: HA returned a non-JSON template result")
             return []
         if not isinstance(devices, list):
             return []
@@ -121,6 +124,10 @@ class HomeAssistantClient:
                 "id": str(d["id"]),
                 "name": str(d.get("name") or d["id"]),
                 "area": str(d.get("area") or ""),
+                "manufacturer": str(d.get("manufacturer") or ""),
+                "model": str(d.get("model") or ""),
+                "entity_ids": sorted({eid for eid in d.get("entity_ids", []) if isinstance(eid, str) and eid})
+                if isinstance(d.get("entity_ids"), list) else [],
             }
             for d in devices
             if isinstance(d, dict) and d.get("id")
