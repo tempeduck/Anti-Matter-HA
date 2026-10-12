@@ -13,7 +13,7 @@
  *       binarizer?, maxSymbols?}. ImageData/ImageBitmap/ArrayBuffer may be
  *       transferred. An ImageBitmap/Blob needs OffscreenCanvas here (see "ready").
  *   {id, type:"scanImage", imageData | bitmap | blob, scale?, options}
- *       Multi-pass still-image decode (original, greycast, inverted, 2x upscale,
+ *       Multi-pass still-image decode (original, greycast, inverted, white margins, 2x upscale,
  *       2x2 tiles); stops at the first pass that finds something unless
  *       options.exhaustive. `scale` maps the pixels sent to original-image pixels.
  *   {id, type:"ping"}
@@ -333,6 +333,15 @@ function fit(w, h, maxDim) {
   return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) };
 }
 
+/** Supply the quiet margin missing from tightly cropped labels. */
+function whiteMargin(src, w, h, pad) {
+  var pw = w + 2 * pad, ph = h + 2 * pad;
+  var out = new Uint8ClampedArray(pw * ph);
+  out.fill(255);
+  for (var y = 0; y < h; y++) out.set(src.subarray(y * w, (y + 1) * w), (y + pad) * pw + pad);
+  return { plane: out, w: pw, h: ph };
+}
+
 /* ---------------------------------------------------------------- decode -- */
 
 function now() {
@@ -427,6 +436,19 @@ function scanImage(msg) {
         var g = getGrey();
         var opts = Object.assign({}, base, { tryInvert: false });
         return run("inverted", lumaToImageData(invert(g.luma), g.w, g.h), opts, (W / g.w) * toOrig, (H / g.h) * toOrig, 0, 0);
+      });
+      // Cropped photos: add a white quiet margin, then retry at half and 0.35 size.
+      [0.5, 0.35].forEach(function (scale) {
+        passes.push(function () {
+          var g = getGrey();
+          var w = Math.max(1, Math.round(g.w * scale)), h = Math.max(1, Math.round(g.h * scale));
+          var plane = resize(g.luma, g.w, g.h, w, h);
+          var pad = Math.max(16, Math.round(Math.max(w, h) * 0.08));
+          var padded = whiteMargin(plane, w, h, pad);
+          var sx = (W / w) * toOrig, sy = (H / h) * toOrig;
+          return run("white-margin-" + scale, lumaToImageData(padded.plane, padded.w, padded.h),
+            base, sx, sy, -pad * sx, -pad * sy);
+        });
       });
       // 4. 2x upscale for tiny codes in small images
       if (Math.max(W, H) < UPSCALE_BELOW) {

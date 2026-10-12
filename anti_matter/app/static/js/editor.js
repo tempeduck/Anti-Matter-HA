@@ -93,6 +93,7 @@
       },
       cats: code ? AM.cat.idsOf(code) : [],
       haId: (c.ha_link && c.ha_link.device_id) || "",
+      haEntity: (c.ha_link && c.ha_link.entity_id) || "",
       haText: "",
       inUse: !!c.in_use,
       vendor: c.device_vendor || "",
@@ -102,7 +103,7 @@
       description: c.description || "",
       notes: c.notes || "",
       conn: {},
-      touched: { vendor: !!str(c.device_vendor), product: !!str(c.device_product), name: !!str(c.name) },
+      touched: { vendor: !!str(c.device_vendor), product: !!str(c.device_product), area: !!str(c.area), name: !!str(c.name) },
       autofilled: { vendor: false, product: false },
       nameFrom: null,
       detailsOpen: null,
@@ -159,7 +160,7 @@
     b.notes = String(m.notes || "").trim();
     b.in_use = !!m.inUse;
     CONN_KEYS.forEach(function (k) { b[k] = !!m.conn[k]; });
-    b.ha_link = { device_id: m.haId || null };
+    b.ha_link = { device_id: m.haId || null, entity_id: m.haId ? m.haEntity || null : null };
     var live = m.cats.filter(function (id) { return AM.cat.known(id); });
     if (!m.id) {
       b.category_ids = live;
@@ -632,9 +633,9 @@
         m.haId ? h("div", { class: "suggest suggest--linked" },
           h("span", { class: "suggest__icon" }, icon("house-plug")),
           h("span", { class: "suggest__txt" }, h("span", null, t("detail.linked_device")), h("b", { dir: "auto" }, m.haText || t("detail.linked_unknown"))),
-          h("button", { type: "button", class: "btn btn--sm", onclick: function () { m.haId = ""; m.haText = ""; markDirty(); fillHa(); } }, icon("unlink"), h("span", null, t("detail.unlink")))) : null,
+          h("button", { type: "button", class: "btn btn--sm", onclick: function () { m.haId = ""; m.haEntity = ""; m.haText = ""; markDirty(); fillHa(); } }, icon("unlink"), h("span", null, t("detail.unlink")))) : null,
         h("div", { class: "notice" }, icon("cloud-off"), h("div", { class: "notice__body" }, h("span", null, t("editor.ha_unavailable")))));
-      R.haInput = R.haStatus = R.haSuggest = R.haList = null;
+      R.haInput = R.haStatus = R.haSuggest = R.haList = R.haEntity = null;
       return;
     }
     R.haInput = h("input", {
@@ -645,9 +646,10 @@
     R.haInput.value = m.haId ? (m.haText || "") : m.haText;
     R.haClear = h("button", { type: "button", class: "icon-btn icon-btn--xs search__end", tip: t("editor.ha_clear"), hidden: !R.haInput.value }, icon("x"));
     R.haList = h("ul", { class: "combobox__list menu", id: "ed-ha-list", role: "listbox", "aria-labelledby": "ed-ha-h", hidden: true });
-    R.haStatus = h("p", { class: "field__hint field__hint--ok", hidden: true });
+    R.haStatus = h("p", { class: "field__hint field__hint--ok editor__ha-status", hidden: true });
     R.haSuggest = h("div", { class: "suggest", hidden: true });
-    AM.fill(sec, head, h("div", { class: "combobox search" }, icon("search"), R.haInput, R.haClear, R.haList), R.haStatus, R.haSuggest);
+    R.haEntity = h("div", { class: "field" });
+    AM.fill(sec, head, h("div", { class: "combobox search" }, icon("search"), R.haInput, R.haClear, R.haList), R.haStatus, R.haEntity, R.haSuggest);
     wireCombobox();
     refreshHaStatus();
     refreshSuggest();
@@ -679,7 +681,8 @@
     var lis = haItems.map(function (d, i) {
       return h("li", { class: "menu__item combobox__opt", role: "option", id: "ed-ha-opt-" + i, "aria-selected": "false", "data-i": String(i) },
         icon(d.id === m.haId ? "check" : "house"),
-        h("span", { class: "combobox__txt" }, h("b", { dir: "auto" }, d.name), d.area ? h("small", { dir: "auto" }, d.area) : null),
+        h("span", { class: "combobox__txt" }, h("b", { dir: "auto" }, d.name), d.area ? h("small", { dir: "auto" }, d.area) : null,
+          h("small", { class: "mono", dir: "ltr", title: (d.entity_ids || []).join(", ") }, (d.entity_ids || []).join(", ") || d.id)),
         sug && d.id === sug.id ? h("span", { class: "tag tag--accent" }, t("scan.suggested")) : h("span"));
     });
     if (!lis.length) lis.push(h("li", { class: "combobox__empty", role: "presentation" }, t("editor.ha_none")));
@@ -705,10 +708,12 @@
   }
   function haSelect(dev) {
     if (!dev) return;
+    if (m.haId !== dev.id) m.haEntity = "";
     m.haId = dev.id;
     m.haText = AM.ha.label(dev);
     R.haInput.value = m.haText;
     haHide();
+    fillHaMetadata(dev);
     markDirty();
     refreshHaStatus();
     refreshSuggest();
@@ -717,8 +722,8 @@
     var q = lc(text);
     if (!q) return null;
     var list = AM.ha.devices();
-    for (var i = 0; i < list.length; i++) if (lc(AM.ha.label(list[i])) === q) return list[i];
-    return null;
+    var matches = list.filter(function (dev) { return lc(AM.ha.label(dev)) === q; });
+    return matches.length === 1 ? matches[0] : null;
   }
   function wireCombobox() {
     var inp = R.haInput;
@@ -728,7 +733,9 @@
     inp.addEventListener("input", function () {
       m.haText = inp.value;
       var dev = exactDevice(inp.value);
+      if (!dev || m.haId !== dev.id) m.haEntity = "";
       m.haId = dev ? dev.id : ""; // an id is stored only on an exact match
+      if (dev) fillHaMetadata(dev);
       markDirty();
       haShow();
       refreshHaStatus();
@@ -764,6 +771,7 @@
     });
     R.haClear.addEventListener("click", function () {
       m.haId = "";
+      m.haEntity = "";
       m.haText = "";
       inp.value = "";
       markDirty();
@@ -778,7 +786,8 @@
     if (m.haId) {
       var id = m.haId;
       AM.fill(R.haStatus, icon("circle-check"), h("span", null, t("editor.ha_linked")),
-        h("button", { type: "button", class: "link-btn", onclick: function () { AM.ha.openDevice(id); } }, h("span", null, t("action.open_in_ha")), icon("external-link")));
+        h("button", { type: "button", class: "link-btn", onclick: function () { AM.ha.openDevice(id); } }, h("span", null, t("action.open_in_ha")), icon("external-link")),
+        h("button", { type: "button", class: "link-btn", id: "ed-ha-refresh", disabled: !!m.haRefreshing, onclick: refreshHaMetadata }, icon("refresh-cw"), h("span", null, t("ha.refresh"))));
       R.haStatus.classList.add("field__hint--ok");
       R.haStatus.hidden = false;
     } else if (str(R.haInput.value)) {
@@ -788,6 +797,57 @@
     } else {
       R.haStatus.hidden = true;
     }
+    renderHaEntity();
+  }
+
+  function fillHaMetadata(dev) {
+    var patch = AM.ha.metadataPatch({ device_vendor: m.vendor, device_product: m.product, area: m.area }, dev);
+    [["vendor", "device_vendor"], ["product", "device_product"], ["area", "area"]].forEach(function (pair) {
+      if (patch[pair[1]] && !m.touched[pair[0]]) {
+        m[pair[0]] = patch[pair[1]];
+        m.touched[pair[0]] = true;
+        if (pair[0] !== "area") m.autofilled[pair[0]] = false;
+        if (R[pair[0]]) R[pair[0]].value = m[pair[0]];
+      }
+    });
+    refreshCount();
+    renderAreas();
+    if (R.vendorAside) R.vendorAside.hidden = !(m.autofilled.vendor || m.autofilled.product);
+  }
+  async function refreshHaMetadata() {
+    if (!m || m.haRefreshing) return;
+    var current = m, generation = gen, id = m.haId;
+    m.haRefreshing = true;
+    var button = AM.byId("ed-ha-refresh");
+    if (button) button.disabled = true;
+    try {
+      await AM.ha.refreshDevices();
+      if (m !== current || gen !== generation || m.haId !== id) return;
+      var dev = AM.ha.device(id);
+      if (!dev) throw { userMessage: t("detail.linked_unknown") };
+      fillHaMetadata(dev);
+      markDirty();
+      renderHaEntity();
+      AM.toast({ message: t("ha.refreshed"), icon: "refresh-cw" });
+    } catch (e) { if (m === current && gen === generation) AM.reportError(e); }
+    finally {
+      current.haRefreshing = false;
+      if (m === current) refreshHaStatus();
+    }
+  }
+  function renderHaEntity() {
+    if (!R.haEntity) return;
+    R.haEntity.hidden = !m.haId;
+    if (!m.haId) return;
+    var dev = AM.ha.device(m.haId), ids = (dev && dev.entity_ids || []).slice();
+    if (m.haEntity && ids.indexOf(m.haEntity) < 0) ids.unshift(m.haEntity);
+    var select = h("select", { id: "ed-ha-entity", class: "select", dir: "ltr" },
+      h("option", { value: "" }, t("ha.device_only")),
+      ids.map(function (eid) { return h("option", { value: eid }, eid); }));
+    select.value = m.haEntity;
+    select.addEventListener("change", function () { m.haEntity = select.value; markDirty(); });
+    AM.fill(R.haEntity, h("label", { class: "field__label", for: "ed-ha-entity" }, t("ha.entity")),
+      h("div", { class: "select-wrap", dir: "ltr" }, select, icon("chevron-down")), h("span", { class: "field__hint" }, t("ha.entity_hint")));
   }
   var suggestTimer = null;
   function refreshSuggest() {
@@ -824,7 +884,7 @@
     R.product = input("ed-product", m.product, { placeholder: t("code.device_product_placeholder"), onInput: function (v) { m.product = v; m.touched.product = true; markDirty(); refreshCount(); refreshSuggest(); } });
     var typeList = h("datalist", { id: "ed-types" }, typeOptions().map(function (v) { return h("option", { value: v }); }));
     R.type = input("ed-type", m.type, { list: "ed-types", placeholder: t("code.device_type_placeholder"), onInput: function (v) { m.type = v; markDirty(); refreshCount(); } });
-    R.area = input("ed-area", m.area, { placeholder: t("code.area_placeholder"), onInput: function (v) { m.area = v; markDirty(); refreshCount(); renderAreas(); } });
+    R.area = input("ed-area", m.area, { placeholder: t("code.area_placeholder"), onInput: function (v) { m.area = v; m.touched.area = true; markDirty(); refreshCount(); renderAreas(); } });
     R.areaSugg = h("div", { class: "area-sugg", hidden: true });
     R.conn = h("div", { class: "row row--wrap", role: "group", "aria-labelledby": "ed-conn-l", style: "--gap:6px" });
     renderConn();
@@ -866,7 +926,7 @@
     if (!list.length) { R.areaSugg.hidden = true; return; }
     AM.fill(R.areaSugg, h("span", null, t("editor.ha_areas")), list.map(function (a) {
       return h("button", { type: "button", class: "chip", dir: "auto", "aria-pressed": String(lc(a) === q),
-        onclick: function () { m.area = a; R.area.value = a; markDirty(); refreshCount(); renderAreas(); } }, a);
+        onclick: function () { m.area = a; m.touched.area = true; R.area.value = a; markDirty(); refreshCount(); renderAreas(); } }, a);
     }));
     R.areaSugg.hidden = false;
   }

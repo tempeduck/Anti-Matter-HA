@@ -586,15 +586,36 @@
       more.addEventListener("click", function () {
         AM.menu.show(more, [
           { icon: "external-link", label: t("action.open_in_ha"), run: function () { AM.ha.openDevice(linkedId); } },
+          { icon: "refresh-cw", label: t("ha.refresh"), run: function () { refreshHaMetadata(code); } },
           { icon: "unlink", label: t("detail.unlink"), danger: true, run: function () { setLink(code, null); } },
         ], { label: t("detail.ha_more") });
       });
-      return h("div", { class: "ha-row ha-row--linked" },
+      var entity = code.ha_link.entity_id;
+      var status = entity ? h("span", { class: "ha-availability", role: "status" }, t("ha.checking")) : null;
+      var row = h("div", { class: "ha-row ha-row--linked" },
         h("span", { class: "ha-row__icon" }, icon("house-plug")),
         h("span", { class: "ha-row__text" }, h("span", null, t("detail.linked_device")),
-          h("b", { dir: "auto" }, dev ? (dev.area ? t("detail.device_area", { name: dev.name, area: dev.area }) : dev.name) : t("detail.linked_unknown"))),
+          h("b", { dir: "auto" }, dev ? (dev.area ? t("detail.device_area", { name: dev.name, area: dev.area }) : dev.name) : t("detail.linked_unknown")),
+          entity ? h("small", { class: "mono", dir: "ltr" }, entity) : null, status),
         h("button", { type: "button", class: "btn btn--sm", onclick: function () { AM.ha.openDevice(linkedId); } }, icon("house"), h("span", null, t("action.open_in_ha"))),
         more);
+      if (status) {
+        // Start after renderDetail has attached the row. Detached rows stop polling,
+        // and late responses never update a different code or a closed detail sheet.
+        setTimeout(function poll() {
+          if (!status.isConnected) return;
+          AM.api("/ha/status?entity_id=" + encodeURIComponent(entity)).then(function (r) {
+            var labels = { available: "ha.available", unavailable: "ha.unavailable", unknown: "ha.unknown", missing: "ha.missing" };
+            if (status.isConnected) {
+              status.textContent = t(labels[r.availability] || "ha.unknown");
+              status.dataset.availability = r.availability;
+            }
+          }).catch(function () {
+            if (status.isConnected) { status.textContent = t("ha.status_unavailable"); status.dataset.availability = "unknown"; }
+          }).finally(function () { if (status.isConnected) setTimeout(poll, 20000); });
+        }, 0);
+      }
+      return row;
     }
     var sug = AM.ha.suggest(code);
     if (!sug) return null;
@@ -607,14 +628,29 @@
 
   async function setLink(code, deviceId) {
     try {
-      await AM.api("/codes/" + encodeURIComponent(code.id), { method: "PUT", body: { ha_link: { device_id: deviceId || null } } });
-      AM.haptic("success");
       var dev = deviceId ? AM.ha.device(deviceId) : null;
+      var current = AM.store.codeById.get(code.id) || code;
+      var patch = AM.ha.metadataPatch(current, dev);
+      patch.ha_link = { device_id: deviceId || null, entity_id: null };
+      await AM.api("/codes/" + encodeURIComponent(code.id), { method: "PUT", body: patch });
+      AM.haptic("success");
       AM.toast({ message: deviceId ? t("toast.linked", { name: dev ? dev.name : "" }) : t("toast.unlinked"), icon: deviceId ? "link-2" : "unlink" });
       await AM.refresh({ force: true });
     } catch (e) {
       AM.reportError(e);
     }
+  }
+
+  var haRefreshing = new Set();
+  async function refreshHaMetadata(code) {
+    if (haRefreshing.has(code.id)) return;
+    haRefreshing.add(code.id);
+    try {
+      await AM.api("/codes/" + encodeURIComponent(code.id) + "/ha-refresh", { method: "POST" });
+      await AM.refresh({ force: true });
+      AM.toast({ message: t("ha.refreshed"), icon: "refresh-cw" });
+    } catch (e) { AM.reportError(e); }
+    finally { haRefreshing.delete(code.id); }
   }
 
   function humanType(v) {

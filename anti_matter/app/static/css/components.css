@@ -673,6 +673,9 @@ a.btn:hover { text-decoration: none; }
 .ha-row__icon { inline-size: 40px; block-size: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--surface); color: var(--accent); box-shadow: var(--sh-1); flex: none; }
 .ha-row__text { flex: 1 1 180px; min-inline-size: 0; display: grid; gap: 1px; font-size: var(--fs-small); color: var(--text-2); }
 .ha-row__text b { color: var(--text); font-size: var(--fs-body); }
+.ha-row__text small { overflow-wrap: anywhere; }
+.ha-availability[data-availability="available"] { color: var(--ok); }
+.ha-availability[data-availability="unavailable"], .ha-availability[data-availability="missing"] { color: var(--danger); }
 @media (max-width: 420px) { .ha-row > .btn { flex: 1 0 100%; } }
 
 .dcl-links { display: flex; flex-wrap: wrap; gap: 8px; }

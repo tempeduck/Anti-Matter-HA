@@ -680,7 +680,13 @@
     var btn = AM.byId("import-confirm");
     btn.disabled = true;
     try {
-      if (!merge) { try { await AM.api("/backup", { method: "POST" }); } catch (e) { /* best effort safety copy */ } }
+      if (!merge) {
+        var backup;
+        try { backup = await AM.api("/backup", { method: "POST" }); }
+        catch (e) { throw { userMessage: t("error.import_backup_failed") }; }
+        if (!backup || !backup.ok || !backup.backup) throw { userMessage: t("error.import_backup_failed") };
+      }
+      if (IMP !== imp) return;
       var before = AM.store.vault.codes.length;
       var v = await AM.api("/import", { method: "POST", body: { data: imp.text, merge: merge } });
       AM.sheets.close(IO, v, "api");

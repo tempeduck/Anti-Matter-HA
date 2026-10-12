@@ -21,7 +21,7 @@
 
   var doc = global.document;
   var I18N = global.AntiMatterI18n;
-  var VERSION = "3.0.3";
+  var VERSION = "3.0.4";
   var V = "?v=" + VERSION;
   var ICONS_URL = "./static/brand/icons.svg" + V;
   var ASSETS = "./static/assets/";
@@ -1876,16 +1876,32 @@
     label: function (dev) {
       if (!dev) return "";
       var same = AM.store.haDevices.filter(function (d) { return d.name === dev.name; }).length;
-      return same > 1 && dev.area ? t("ha.device_in_area", { name: dev.name, area: dev.area }) : dev.name;
+      var name = same > 1 && dev.area ? t("ha.device_in_area", { name: dev.name, area: dev.area }) : dev.name;
+      return same > 1 ? name + " — " + ((dev.entity_ids || [])[0] || dev.id) : name;
     },
-    /** Case-insensitive search over name + area, max `limit` (25). Empty query lists all (sorted). */
+    /** Search names, areas, registry metadata and entity IDs, max `limit` (25). */
     search: function (query, limit) {
       var q = String(query || "").trim().toLocaleLowerCase();
       var list = AM.store.haDevices.filter(function (d) {
-        return !q || (String(d.name || "") + " " + String(d.area || "")).toLocaleLowerCase().indexOf(q) >= 0;
+        return !q || [d.name, d.area, d.manufacturer, d.model, d.id].concat(d.entity_ids || []).join(" ").toLocaleLowerCase().indexOf(q) >= 0;
       });
       list.sort(function (a, b) { return AM.compare(a.name, b.name) || AM.compare(a.area, b.area); });
       return list.slice(0, limit || 25);
+    },
+    metadataPatch: function (code, dev) {
+      var patch = {};
+      if (!dev) return patch;
+      [["device_vendor", "manufacturer"], ["device_product", "model"], ["area", "area"]].forEach(function (pair) {
+        var value = String(dev[pair[1]] || "").trim();
+        if (!String(code[pair[0]] || "").trim() && value) patch[pair[0]] = value;
+      });
+      return patch;
+    },
+    refreshDevices: async function () {
+      var devices = await AM.api("/ha/devices?refresh=true");
+      AM.store.haDevices = Array.isArray(devices) ? devices : [];
+      AM.emit("ha", { devices: AM.store.haDevices, areas: AM.store.areas });
+      return AM.store.haDevices;
     },
     /** Best device for an unlinked code (token overlap of name/vendor/product with device name + area), or null. */
     suggest: function (code) {

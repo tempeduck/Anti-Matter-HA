@@ -76,10 +76,15 @@
 .editor__preview .readout--wide .tag { font-size: var(--fs-micro); }
 .editor__cats .chip { max-inline-size: 100%; }
 .editor__cats .chip span { overflow: hidden; text-overflow: ellipsis; }
-.editor__details > summary { display: flex; align-items: center; gap: 10px; }
+.editor__details > summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .editor__details > summary .tag { font-weight: var(--fw-semibold); }
 .editor__details-body { padding-block: 4px 8px; }
 .editor .select-wrap .select { inline-size: 100%; }
+.editor__ha-status { flex-wrap: wrap; }
+.editor__col { grid-template-columns: minmax(0, 1fr); }
+.editor__section { min-inline-size: 0; grid-template-columns: minmax(0, 1fr); }
+.editor__section > h3 { flex-wrap: wrap; }
+@media (max-width: 420px) { .editor .sheet__foot { flex-wrap: wrap; } }
 .editor .field-row > .field { min-inline-size: 0; }
 .editor .fill-strip .btn { flex: none; }
 @media (max-width: 520px) { .editor .fill-strip .btn { flex: 1; } }

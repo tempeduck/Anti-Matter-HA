@@ -4,7 +4,7 @@
 
 # Anti-Matter
 
-[![Version](https://img.shields.io/badge/version-3.0.3-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.0.4-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/LICENSE)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
@@ -26,7 +26,7 @@ no account and no cloud.
 - **Decoded for you.** For Matter you get the vendor and product (with official CSA names), passcode, discriminator and discovery modes. For Z-Wave you get the PIN, the security classes and the device name from a bundled offline database. For HomeKit you get the setup ID and accessory category.
 - **Cards, labels or a table.** Printable labels with the official wordmarks, flip to the decoded back, and present full screen.
 - **Organise.** Colour-and-icon categories, search, and filters for protocol, vendor, product, type, area, in use and connectivity.
-- **Home Assistant device links.** Get a suggested match for each code, and jump to the device page in one tap.
+- **Home Assistant device and entity links.** Search by entity ID, fill empty vendor/product/area from HA, and refresh remaining empty fields without replacing your edits. Optionally choose an entity to show its availability in details. Jump to the device page in one tap.
 - **Trash, backups, export and import.** Backups can run hourly, daily, weekly or monthly, and they are also included in Home Assistant backups.
 - **24 languages,** including Hebrew and Arabic right to left, plus light, dark and Invert themes that follow Home Assistant.
 
@@ -62,3 +62,5 @@ add-on. Full credit to Jesse for the original Rematters add-on and its design.
 
 Matter, HomeKit, Z-Wave, Zigbee and Tuya are trademarks of their respective owners. They are used here only to
 identify protocols.
+
+**HA availability and connectivity.** Availability reflects the selected HA entity, not a separate network probe or a HomeKit pairing check. An app update entity describes the app, not every accessory it exports. **In use/Spare** remains your own inventory flag. The legacy JSON field `conn_matter` means **Thread**; the protocol is stored in `code_type`. Matter devices using Wi-Fi should not have Thread inferred from their protocol alone.

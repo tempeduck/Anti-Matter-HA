@@ -22,7 +22,7 @@ class HomeAssistantClient:
     def __init__(self) -> None:
         self.token = os.environ.get("SUPERVISOR_TOKEN", "")
         self.enabled = bool(self.token)
-        self._devices_cache: Optional[list[dict[str, str]]] = None
+        self._devices_cache: Optional[list[dict[str, Any]]] = None
         self._devices_cache_at = 0.0
 
     def _headers(self) -> dict[str, str]:
@@ -67,12 +67,12 @@ class HomeAssistantClient:
             ids = [e for e in ids if e.startswith(prefix)]
         return sorted(ids)
 
-    async def list_devices(self) -> list[dict[str, str]]:
-        """[{id, name, area}] for every HA device with at least one entity — via the
+    async def list_devices(self, *, refresh: bool = False) -> list[dict[str, Any]]:
+        """Device identity, metadata and entity IDs for devices with a state — via the
         template API's `device_id()`/`device_attr()`/`area_name()` functions (no REST
         device-registry endpoint exists). Lets the UI link to a device's own page
-        (`/config/devices/device/<id>`) without ever needing an entity_id itself, and
-        the `area` disambiguates same-named devices in the picker / auto-match.
+        (`/config/devices/device/<id>`). Entity IDs disambiguate same-named devices
+        and let users choose an entity to monitor independently of its device link.
 
         device_id() is only a template *function* in HA, not a registered filter —
         `states | map('device_id')` fails, so this collects ids via a plain for-loop
@@ -83,7 +83,7 @@ class HomeAssistantClient:
         if not self.enabled:
             return []
         now = time.monotonic()
-        if self._devices_cache is not None and (now - self._devices_cache_at) < _DEVICES_CACHE_TTL:
+        if not refresh and self._devices_cache is not None and (now - self._devices_cache_at) < _DEVICES_CACHE_TTL:
             return self._devices_cache
         url = f"{SUPERVISOR_CORE}/template"
         template = (
@@ -97,7 +97,10 @@ class HomeAssistantClient:
             "{% for did in ns.ids %}"
             "{% set ns.items = ns.items + [{'id': did,"
             " 'name': device_attr(did, 'name_by_user') or device_attr(did, 'name') or did,"
-            " 'area': area_name(did) or ''}] %}"
+            " 'area': area_name(did) or '',"
+            " 'manufacturer': device_attr(did, 'manufacturer') or '',"
+            " 'model': device_attr(did, 'model') or '',"
+            " 'entity_ids': (device_entities(did) | list | sort)}] %}"
             "{% endfor %}"
             "{{ ns.items | to_json }}"
         )
@@ -106,21 +109,25 @@ class HomeAssistantClient:
                 resp = await client.post(url, headers=self._headers(), json={"template": template})
                 resp.raise_for_status()
                 raw = resp.text.strip()
-        except httpx.HTTPError as exc:
-            _LOGGER.warning("list_devices: HA template request failed: %s", exc)
-            return []
+        except httpx.HTTPError:
+            _LOGGER.warning("list_devices: HA template request failed")
+            raise
         try:
             devices = json.loads(raw)
         except (ValueError, TypeError):
-            _LOGGER.warning("list_devices: HA returned non-JSON template result: %r", raw[:300])
-            return []
+            _LOGGER.warning("list_devices: HA returned a non-JSON template result")
+            raise ValueError("Invalid HA device response") from None
         if not isinstance(devices, list):
-            return []
+            raise ValueError("Invalid HA device response")
         out = [
             {
                 "id": str(d["id"]),
                 "name": str(d.get("name") or d["id"]),
                 "area": str(d.get("area") or ""),
+                "manufacturer": str(d.get("manufacturer") or ""),
+                "model": str(d.get("model") or ""),
+                "entity_ids": sorted({eid for eid in d.get("entity_ids", []) if isinstance(eid, str) and eid})
+                if isinstance(d.get("entity_ids"), list) else [],
             }
             for d in devices
             if isinstance(d, dict) and d.get("id")

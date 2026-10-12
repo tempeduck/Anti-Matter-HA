@@ -3,6 +3,15 @@
 Detailed per-commit history is in [git log](https://github.com/tempeduck/Anti-Matter-HA/commits/main).
 This file summarizes the notable changes by theme.
 
+## 3.0.4 — HA entity links and safer imports
+
+- Search HA devices by their entity IDs and show those IDs in the picker, including devices with the same name and area (#9). Keep the device ID as the stable link.
+- Fill blank vendor, product and area fields when selecting a device. **Refresh from HA** in the editor and detail menu fills empty fields without replacing existing values or edits made while the request is pending (#7).
+- Optionally select an HA entity and show its availability in details. Availability describes that entity, including unavailable, unknown and missing states; it is separate from the manually set In use/Spare status. Rename **Decoded offline** to **Decoded locally**.
+- Retry cropped or gray photographs with white margins at half and 0.35 size, preserving detected positions in the original image (#6). Synthetic photo tests cover gray, inverted and JPEG images; original reporter hardware still needs a retest.
+- Stop Replace imports if the promised backup fails, and cancel replacement when its dialog closes during backup. Report storage failures separately from invalid JSON. Redact raw and formatted HomeKit pairing codes in errors and logs.
+- Add backend, browser, delayed-response and decoder regressions. Translate new controls and notifications in all 24 languages. Existing QR scaling, Companion camera and visible scanner feedback remain covered.
+
 ## 3.0.3 — Show the saved HomeKit details
 
 - Show HomeKit connection capabilities in decoded details, editor previews and scanner results. Expand QR details for the connection flags, category ID, format version and reserved bits.

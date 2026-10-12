@@ -32,6 +32,13 @@ class Category(BaseModel):
 
 class HaLink(BaseModel):
     device_id: Optional[str] = None
+    entity_id: Optional[str] = Field(default=None, max_length=255, pattern=r"^[a-z_]+\.[a-z0-9_]+$")
+
+    @model_validator(mode="after")
+    def _entity_has_device(self):
+        if self.entity_id and not self.device_id:
+            raise ValueError("An entity link requires its Home Assistant device")
+        return self
 
 
 class MatterCode(BaseModel):
@@ -106,7 +113,7 @@ class VaultDeletions(BaseModel):
 class VaultMeta(BaseModel):
     version: int = 1
     exported_at: Optional[str] = None
-    addon_version: str = "3.0.3"
+    addon_version: str = "3.0.4"
     source: Optional[str] = None
     deletions: VaultDeletions = Field(default_factory=VaultDeletions)
 

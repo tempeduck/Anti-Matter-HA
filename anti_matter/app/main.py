@@ -22,11 +22,17 @@ text>, ...extra}}``. ``error`` is a stable machine-readable code the UI localize
     invalid_code                 400     label/card renderer rejected the stored code
     nothing_to_render            404     label.png / save-to-media: no manual code and no QR
     invalid_import               400     POST /api/import: not a valid vault export
+    storage_error                500     POST /api/import: vault write failed
+    backup_failed                500     POST /api/backup: backup write failed
     invalid_upload               400     save-to-media: bad PNG/SVG, or unsafe SVG content
     unsupported_media_type       415     save-to-media: image body that is not PNG or SVG
     too_large                    413     save-to-media: upload over 8 MB
     media_unavailable            500     save-to-media: /media folder missing or not writable
     ha_attribute_not_found       404     GET /api/ha/attribute
+    ha_unavailable               503     HA device lookup, refresh or entity status failed
+    ha_not_linked                400     POST /api/codes/{id}/ha-refresh: no linked device
+    ha_device_not_found          404     HA metadata refresh: linked device is missing
+    ha_link_changed              409     HA metadata refresh: link changed during request
     invalid_request              422     request body/query failed validation; extra ``errors``
     not_found / method_not_allowed / bad_request / http_error
                                          fallback for framework errors (unknown route etc.)
@@ -65,6 +71,7 @@ from backup_schedule import is_due, load_settings, mark_ran, period_key, save_se
 from ha_client import HomeAssistantClient
 from matter_dcl import fetch_model_info, fetch_vendor_info
 from models import (
+    HaLink,
     Category,
     CategoryCreate,
     CategoryUpdate,
@@ -109,7 +116,7 @@ _LOGGER = logging.getLogger("anti_matter")
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-APP_VERSION = "3.0.3"
+APP_VERSION = "3.0.4"
 PORT = int(os.environ.get("ANTIMATTER_PORT", "8099"))
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -136,6 +143,8 @@ MAX_MEDIA_UPLOAD_BYTES = 8 * 1024 * 1024
 _REDACT_PATTERNS = [
     re.compile(r"MT:[A-Za-z0-9./+_-]+", re.I),
     re.compile(r"X-HM://[A-Za-z0-9]+", re.I),
+    re.compile(r"\b\d{3}-\d{2}-\d{3}\b"),  # HomeKit PIN, formatted
+    re.compile(r"\b\d{8}\b"),  # HomeKit PIN, raw
     re.compile(r"\b\d{4}-\d{3}-\d{4}\b"),  # Matter manual code, formatted
     re.compile(r"\b\d{9,90}\b"),  # any long digit run (Z-Wave DSK/QR, raw manual codes)
 ]
@@ -627,10 +636,13 @@ async def import_vault(body: ImportBody):
     try:
         _check_import_shape(body.data)
         vault = storage.import_json(body.data, merge=body.merge)
+    except OSError as exc:
+        _LOGGER.warning("Vault import storage failure (merge=%s): %s", body.merge, type(exc).__name__)
+        raise _api_error(500, "storage_error", "Could not write the vault. Check storage and try again.") from None
     except Exception as exc:
         # Validation errors quote the offending input (possibly a code): redact for the log.
         _LOGGER.warning("Vault import failed (merge=%s): %s", body.merge, _redact(exc))
-        raise _api_error(400, "invalid_import", f"Invalid JSON: {exc}") from exc
+        raise _api_error(400, "invalid_import", f"Invalid JSON: {_redact(exc)}") from None
     _LOGGER.info(
         "Vault imported (merge=%s): now %d codes, %d categories",
         body.merge, len(vault.codes), len(vault.categories),
@@ -640,7 +652,11 @@ async def import_vault(body: ImportBody):
 
 @app.post("/api/backup")
 async def trigger_backup():
-    result = run_backup()
+    try:
+        result = run_backup()
+    except OSError as exc:
+        _LOGGER.warning("Manual backup storage failure: %s", type(exc).__name__)
+        raise _api_error(500, "backup_failed", "Could not back up the vault. Check storage and try again.") from None
     _LOGGER.info("Manual backup triggered: %s", result)
     return result
 
@@ -824,7 +840,7 @@ async def create_code(body: MatterCodeCreate):
     code = MatterCode(**data)
     _apply_code_fields(code)
     if ha_link:
-        code.ha_link = ha_link
+        code.ha_link = HaLink.model_validate(ha_link)
     _check_category_ids(vault, code.category_ids)
     dup = _find_duplicate_code(vault, code.model_dump(mode="json"))
     if dup:
@@ -848,7 +864,7 @@ async def update_code(code_id: str, body: MatterCodeUpdate):
     for key, value in updates.items():
         setattr(code, key, value)
     if ha_link is not None:
-        code.ha_link = ha_link
+        code.ha_link = HaLink.model_validate(ha_link)
     if "manual_code" in updates or "qr_payload" in updates:
         _apply_code_fields(code)
     code.updated_at = utc_now()
@@ -859,6 +875,41 @@ async def update_code(code_id: str, body: MatterCodeUpdate):
     _LOGGER.info(
         "Code updated: id=%s name=%s fields=%s", code_id, _redact(code.name), sorted(updates.keys())
     )
+    return code
+
+
+@app.post("/api/codes/{code_id}/ha-refresh")
+async def refresh_code_from_ha(code_id: str):
+    """Fill only empty metadata from the linked HA device, preserving concurrent edits."""
+    code = _find_code(storage.load(), code_id)
+    device_id = code.ha_link.device_id
+    if not device_id:
+        raise _api_error(400, "ha_not_linked", "Link a Home Assistant device first.")
+    if not ha.enabled:
+        raise _api_error(503, "ha_unavailable", "Home Assistant is unavailable.")
+    try:
+        devices = await ha.list_devices(refresh=True)
+    except Exception:
+        raise _api_error(503, "ha_unavailable", "Home Assistant device information is unavailable.") from None
+    dev = next((d for d in devices if d["id"] == device_id), None)
+    if dev is None:
+        raise _api_error(404, "ha_device_not_found", "Device not found in Home Assistant.")
+    # HA requests yield. Reload after the request so an edit, deletion or relink
+    # made while it was pending cannot be overwritten by this response.
+    vault = storage.load()
+    code = _find_code(vault, code_id)
+    current_id = code.ha_link.device_id
+    if current_id != device_id:
+        raise _api_error(409, "ha_link_changed", "The device link changed. Refresh again.")
+    changed = False
+    for field, source in (("device_vendor", "manufacturer"), ("device_product", "model"), ("area", "area")):
+        value = str(dev.get(source) or "").strip()
+        if not str(getattr(code, field) or "").strip() and value:
+            setattr(code, field, value)
+            changed = True
+    if changed:
+        code.updated_at = utc_now()
+        storage.save(vault)
     return code
 
 
@@ -1284,11 +1335,32 @@ async def zwave_device_info(manufacturer_id: int, product_type: int, product_id:
 
 
 @app.get("/api/ha/devices")
-async def ha_devices():
-    """[{id, name}] for every HA device — populates the device-picker in the code
-    dialog so ha_link stores a device_id directly (linking to its own HA page),
-    with no entity_id involved."""
-    return await ha.list_devices()
+async def ha_devices(refresh: bool = Query(False)):
+    """HA device identity, registry metadata and entity IDs for the linking picker."""
+    try:
+        return await ha.list_devices(refresh=refresh)
+    except Exception:
+        raise _api_error(503, "ha_unavailable", "Home Assistant device information is unavailable.") from None
+
+
+@app.get("/api/ha/status")
+async def ha_status(entity_id: str = Query(pattern=r"^[a-z_]+\.[a-z0-9_]+$", max_length=255)):
+    """Availability of a selected HA entity; never expose its attributes or values."""
+    if not ha.enabled:
+        raise _api_error(503, "ha_unavailable", "Home Assistant is unavailable.")
+    try:
+        state = await ha.get_state(entity_id)
+    except Exception:
+        raise _api_error(503, "ha_unavailable", "Home Assistant is unavailable.") from None
+    if state is None:
+        availability = "missing"
+    elif not state.get("state"):
+        availability = "unknown"
+    elif state.get("state") in ("unknown", "unavailable"):
+        availability = state["state"]
+    else:
+        availability = "available"
+    return {"entity_id": entity_id, "availability": availability}
 
 
 # --- Static UI (relative paths for ingress) ---

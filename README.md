@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="anti_matter/CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.0.3-blue" alt="Version 3.0.0"></a>
+  <a href="anti_matter/CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.0.4-blue" alt="Version 3.0.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Home%20Assistant-add--on-41BDF5?logo=homeassistant&logoColor=white" alt="Home Assistant add-on">
   <img src="https://img.shields.io/badge/aarch64-yes-green" alt="Supports aarch64">
@@ -75,10 +75,12 @@ Anti-Matter keeps all of those codes in one place in Home Assistant:
 
 The add-on also includes:
 
-- **Home Assistant device links.** Link a code to a device, get a suggested match for unlinked codes, and jump straight to the device page.
+- **Home Assistant device and entity links.** Search the device picker by name or entity ID. Selecting a device fills empty vendor, product and area fields. **Refresh from HA** fills remaining empty fields without replacing your values. Optionally choose an entity to show its availability in details, and jump straight to the device page.
 - **Trash with undo.** Deleted codes and categories wait in the Trash until you restore them or empty the bin.
 - **Scheduled backups.** Back up hourly, daily, weekly or monthly, with automatic pruning. Export and import go through one JSON file.
 - **Light, dark and Invert.** The theme follows Home Assistant, and Invert shows white-on-black QR codes for dark rooms. The whole app works by keyboard, mouse and touch.
+
+**HA availability and connectivity.** Availability reflects the selected HA entity, not a separate network probe or a HomeKit pairing check. An app update entity describes the app, not every accessory it exports. **In use/Spare** remains your own inventory flag. The legacy JSON field `conn_matter` means **Thread**; the protocol is stored in `code_type`. Matter devices using Wi-Fi should not have Thread inferred from their protocol alone.
 
 ## Scanning
 
@@ -108,7 +110,7 @@ that Anti-Matter cannot change. You still have three good options:
 
 - **Batch scanning.** **Batch mode** starts off and remembers your choice. In the Companion app, choose it before opening the camera; each recognized code is saved automatically, then a visible **Saved** receipt offers **Scan next**. In the web scanner, **Save & scan next** stores the code and returns to the camera. A tray lists the session with **Undo**, and **Done** shows a summary with **Review**.
 - **Several codes in one photo.** A photo of a whole box of labels shows every code it finds, numbered on the image. You tick the ones to save.
-- **A decoder that keeps trying.** Hard photos get more passes: grayscale and contrast, inverted, upscaled, and tiled for large images. Screenshots work too.
+- **A decoder that keeps trying.** Hard photos get more passes: grayscale and contrast, inverted, white margins with downscaling for cropped images, upscaled, and tiled for large images. Screenshots work too.
 - **Duplicate detection.** Anti-Matter checks each result against your vault before anything is saved. It recognises the same device even when its QR and its printed manual code look different. A duplicate is never saved twice, and **Open existing** takes you to the one you already have.
 - **Nothing is rejected.** A code Anti-Matter does not recognise is saved as **Other**, exactly as scanned. A bare 8-digit number could be HomeKit or something else, so you are asked to choose.
 
