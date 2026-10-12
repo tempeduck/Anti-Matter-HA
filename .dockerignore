@@ -1,0 +1,21 @@
+# Only the standalone Dockerfile and application source enter the build context.
+**
+!Dockerfile
+!LICENSE
+!anti_matter/
+!anti_matter/app/
+!anti_matter/app/**
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/anti_matter.json
+**/anti-matter-bin.json
+**/backup_settings.json
+**/options.json
+**/backups/
+**/photos/
+**/media/
+**/*.log

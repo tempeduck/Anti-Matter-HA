@@ -1,0 +1,12 @@
+services:
+  anti-matter:
+    build: .
+    image: ${ANTIMATTER_IMAGE:-anti-matter:local}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ANTIMATTER_PORT:-8099}:8099"
+    volumes:
+      - data:/config
+
+volumes:
+  data:

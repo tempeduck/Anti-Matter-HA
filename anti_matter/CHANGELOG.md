@@ -3,6 +3,12 @@
 Detailed per-commit history is in [git log](https://github.com/tempeduck/Anti-Matter-HA/commits/main).
 This file summarizes the notable changes by theme.
 
+## 3.4.0 — Standalone Docker and simpler documentation
+
+- Run the vault, offline scanner, labels and local backups outside Home Assistant with Docker Compose. The standalone image uses a non-root user, a health check, a persistent configuration volume and a localhost port by default. HA discovery, linking and automatic In use remain features of the HA app.
+- Shorten the README around features and installation, move the full instructions and credits into linked guides, and document Docker access, storage, updates and migration. Update app-page images and container source metadata to this fork.
+- Validate standalone amd64/arm64 builds and exercise synthetic saves, labels, backups and data preservation through actual container replacement in CI.
+
 ## 3.3.1 — Fit long Matter codes to their display
 
 - Automatically size Matter setup codes to the available width, including 21-digit codes on QR labels and in the detail view's manual setup block. Keep the complete code on one line with its separators and copy value intact; resize with the display and retain the normal size for shorter codes.

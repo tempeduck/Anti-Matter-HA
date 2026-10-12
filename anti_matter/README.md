@@ -1,70 +1,65 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Cl3tus/Anti-Matter-HA/main/anti_matter/banner.png" alt="Anti-Matter: offline vault and scanner for smart-home pairing codes" width="100%">
+  <img src="https://raw.githubusercontent.com/tempeduck/Anti-Matter-HA/main/anti_matter/banner.png" alt="Anti-Matter: local pairing-code vault and scanner" width="100%">
 </p>
 
-# Anti-Matter
+# Anti-Matter for Home Assistant
 
-[![Version](https://img.shields.io/badge/version-3.3.1-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.4.0-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/tempeduck/Anti-Matter-HA/blob/main/LICENSE)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![24 languages](https://img.shields.io/badge/languages-24-7B61FF)
 
-Keep every **Matter**, **HomeKit**, **Z-Wave**, **Zigbee** and **Tuya** pairing code you own in one private vault
-inside Home Assistant. Scan a label once, and you can show, print or re-pair from it whenever you need to. There is
-no account and no cloud.
+Keep Matter, HomeKit, Z-Wave, Zigbee and Tuya pairing codes in a local vault.
+Open Anti-Matter from the HA sidebar, scan a label, and display its QR or manual
+setup code whenever you need to pair the device again.
 
-![Anti-Matter vault in the dark and light theme, with a phone scanning a Matter label](https://raw.githubusercontent.com/Cl3tus/Anti-Matter-HA/main/docs/screenshots/hero.png)
+![The vault in dark and light themes](https://raw.githubusercontent.com/tempeduck/Anti-Matter-HA/main/docs/screenshots/hero.png)
 
 ## Features
 
-- **Scan from anywhere.** You can use the live camera, a photo, a screenshot, drag and drop, or pasted text. The bundled decoder runs in every browser, including iPhone and Firefox, and works fully offline.
-- **Home Assistant app scanner.** Choose batch mode before opening the native camera. Each batch save shows a visible **Saved** receipt with **Scan next**. This works even on `http://`.
-- **Batch scanning.** Off by default, with your choice remembered. In the web scanner, **Save & scan next** stores each code and returns to the camera, with Undo for every code in the session.
-- **Several codes in one photo.** Photograph a pile of labels and tick the ones to save.
-- **Duplicate detection.** The same device is never saved twice, even when you scan its QR once and type its manual code another time.
-- **Decoded for you.** For Matter you get the vendor and product (with official CSA names), passcode, discriminator and discovery modes. For Z-Wave you get the PIN, the security classes and the device name from a bundled offline database. For HomeKit you get the setup ID and accessory category.
-- **Cards, labels or a table.** Printable labels with the official wordmarks, flip to the decoded back, and present full screen.
-- **Organise.** Colour-and-icon categories, search, and filters for protocol, vendor, product, type, area, in use and connectivity.
-- **Home Assistant device and entity links.** Search by entity ID, fill empty vendor/product/area from HA, and refresh remaining empty fields without replacing your edits. Optionally choose an entity to show its availability in details. Jump to the device page in one tap.
-- **Automatic In use.** Linked records are marked In use only after HA confirms a usable state. Checks run every minute; temporary outages keep the previous flag. Confirmed registry removal or explicit unlinking clears an automatic flag. Choose Manual or toggle In use in the editor to preserve your own setting. Each automatic change verifies a current-vault backup.
-- **Search Home Assistant.** List devices and their available details, including devices without pairing codes. Filter by protocol, select devices to include or blank-field updates, then add missing codes in the saved record. Match by HA identity or pairing code, preserve existing values, review uncertain or possible existing records, respect Trash, and verify a vault backup before saving. Available in the sidebar, the phone's More menu and Import & export.
-- **Trash, backups, export and import.** Backups can run hourly, daily, weekly or monthly, and they are also included in Home Assistant backups.
-- **Pull code from HA.** Select a device and entity in the editor, enter the pairing-code attribute name and pull it into the form. Review before saving. The integration must expose a text or integer code; linking alone cannot retrieve one.
-- **Offline backup viewer.** Download the HTML viewer from **Import & export**, open it in a browser and choose a JSON export or backup. Search records and view complete stored QR codes without Home Assistant or internet. The viewer is read-only and uploads nothing.
-- **24 languages,** including Hebrew and Arabic right to left, plus light, dark and Invert themes that follow Home Assistant.
-
-![Batch scanning: result sheet and the session tray](https://raw.githubusercontent.com/Cl3tus/Anti-Matter-HA/main/docs/screenshots/scanner-result.png)
-
-## Good to know
-
-- **Live camera needs HTTPS.** Browsers only allow the camera on `https://` pages. On `http://`, use the Companion app, or scan from a photo; *Take photo* opens your phone's camera app.
-- **Your data stays local.** Everything is stored in plain JSON in the add-on's config folder (`\\<HA-IP>\app_configs\<hash>_anti_matter\` over Samba). The only outbound request sends a Matter code's vendor ID and product ID to the official CSA registry, to look up the names.
-- **Every Home Assistant user can open the panel.** That includes non-admins, so they can read the codes too.
-
-![Details of a Matter code: linked Home Assistant device and decoded payload](https://raw.githubusercontent.com/Cl3tus/Anti-Matter-HA/main/docs/screenshots/detail.png)
+- **Offline scanner:** browser cameras, photos, screenshots, pasted text and the
+  Companion app's native camera. Batch mode shows a Saved receipt and Scan next.
+- **Decoded setup details:** Matter, HomeKit and Z-Wave fields, vendor/product
+  names, and complete codes that scale to fit their display.
+- **HA device discovery:** select devices to include, fill blank metadata,
+  link devices/entities, and pull pairing data when an integration exposes it.
+- **Automatic In use:** confirmed HA activity marks linked records in use;
+  temporary outages retain their flag. Manual tracking remains available.
+- **Organised storage:** cards, printable labels, tables, categories, search,
+  filters, full-screen QR presentation and 24 languages.
+- **Backups and recovery:** Trash with undo, scheduled backups, JSON import/export
+  and a downloadable HTML viewer for offline access to saved backups.
 
 ## Configuration
 
-| Option | Values | What it does |
+| Option | Values | Purpose |
 | --- | --- | --- |
-| Language | `Auto` or one of 24 languages | Default app language. `Auto` follows Home Assistant, then the browser. |
-| Theme | `Auto`, `Light`, `Dark` | Default theme. `Auto` follows Home Assistant. |
-| Backups to keep | 1–100 | Starting value for the backup schedule. After you save the in-app Backups dialog, the value set there is used instead. |
+| Language | Auto or one of 24 languages | Default interface language; Auto follows HA, then the browser |
+| Theme | Auto, Light or Dark | Default appearance; Auto follows HA |
+| Backups to keep | 1–100 | Initial backup retention; the in-app Backups dialog takes precedence after saving |
 
-A language or theme picked inside the app is remembered by that browser and takes precedence over these options.
+Language and theme choices inside the app are remembered by that browser.
 
-The **Documentation** tab has the full manual. The
-[project page](https://github.com/tempeduck/Anti-Matter-HA) has more screenshots, and the
-[changelog](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md) lists what changed in 3.0.
+## Storage and access
 
-## Credits
+Data is plain JSON in the app's config folder and is included in HA backups that
+contain this app. Over Samba, look for `app_configs/<hash>_anti_matter`.
+Backups/exports contain the vault; copying the entire stopped app's config folder
+preserves Trash and backup settings too. Every HA user who can open the panel can read
+the pairing codes.
 
-Anti-Matter is a rewrite of [Rematters](https://github.com/Rematters/Rematters-HA) by
-Jesse Hulswit ([JesseFPV](https://rematters.casa/)), reworked into a cloud-free, local-only
-add-on. Full credit to Jesse for the original Rematters add-on and its design.
+Live browser cameras need HTTPS or localhost. On ordinary HTTP, use a photo or
+the HA Companion scanner. Optional CSA lookups send only vendor/product IDs;
+QR decoding, fonts and other assets are bundled locally.
 
-Matter, HomeKit, Z-Wave, Zigbee and Tuya are trademarks of their respective owners. They are used here only to
-identify protocols.
+## Documentation
 
-**HA availability and connectivity.** Availability reflects the selected HA entity, not a separate network probe or a HomeKit pairing check. An app update entity describes the app, not every accessory it exports. **In use/Spare** can follow confirmed HA activity or your manual inventory choice; temporary unavailability does not make a deployed device Spare. The legacy JSON field `conn_matter` means **Thread**; the protocol is stored in `code_type`. Matter devices using Wi-Fi should not have Thread inferred from their protocol alone.
+[User guide](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/DOCS.md) ·
+[Changelog](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md) ·
+[Standalone Docker](https://github.com/tempeduck/Anti-Matter-HA/blob/main/docs/docker.md) ·
+[Credits and licenses](https://github.com/tempeduck/Anti-Matter-HA/blob/main/docs/credits.md)
+
+Based on [Rematters](https://github.com/Rematters/Rematters-HA),
+[Cl3tus/Anti-Matter-HA](https://github.com/Cl3tus/Anti-Matter-HA) and
+[kedube/Anti-Matter-HA](https://github.com/kedube/Anti-Matter-HA).

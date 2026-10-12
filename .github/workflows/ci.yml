@@ -112,6 +112,42 @@ jobs:
         env:
           PYTHON: python
 
+  standalone:
+    name: Standalone Docker runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: docker/setup-buildx-action@v3
+      - name: Health, local access, labels, backup and persistent storage
+        run: python3 tools/ci/docker.py
+
+  standalone-build:
+    name: Standalone Docker build (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: arm64
+            platform: linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        if: matrix.arch != 'amd64'
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: false
+          cache-from: type=gha,scope=standalone-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=standalone-${{ matrix.arch }}
+
   build:
     name: Docker build (${{ matrix.arch }})
     runs-on: ubuntu-latest

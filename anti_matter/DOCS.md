@@ -1,8 +1,16 @@
 # Anti-Matter: user manual
 
 Anti-Matter is a private vault for your smart-home **pairing codes**: Matter, HomeKit, Z-Wave, Zigbee, Tuya and
-anything else. It scans and decodes each code, stores it on your Home Assistant, and shows a clean, scannable label
-whenever you need to pair a device again.
+anything else. It scans and decodes each code, stores it locally, and shows a clean, scannable label
+whenever you need to pair a device again. Run it as a Home Assistant app or with standalone Docker.
+
+[Installation](https://github.com/tempeduck/Anti-Matter-HA#installation) ·
+[Docker guide](https://github.com/tempeduck/Anti-Matter-HA/blob/main/docs/docker.md) ·
+[Changelog](https://github.com/tempeduck/Anti-Matter-HA/blob/main/anti_matter/CHANGELOG.md)
+
+The scanner, vault, labels and local backups work in either installation. HA
+device/entity links, discovery, code pulling and automatic In use tracking require
+the Home Assistant app. Follow the Docker guide for standalone startup and access.
 
 Screenshots and the project page: <https://github.com/tempeduck/Anti-Matter-HA>
 
@@ -126,8 +134,8 @@ Only codes of the same protocol are compared.
    - **Zigbee / Tuya / Other:** a manual code and/or raw QR payload, stored exactly as entered. *Other* also asks for a standard name, such as "Wyze".
    - **Fill from the label:** **Scan** or **Photo** fills these fields in from a label.
 4. **Categories:** tick any number, or create one with **+ New category**.
-5. **Home Assistant device** (optional): search by name or area and pick a device. A **Suggested match** appears when a device name resembles the code's name.
-6. **Device details:** In use, Vendor, Product, Type, Area (with your Home Assistant areas as suggestions), Connectivity (Wi-Fi, Thread, Zigbee, Bluetooth, Z-Wave), Description and Notes. Vendor and product decoded from a Matter or Z-Wave payload fill only empty fields you have not typed in.
+5. **Home Assistant device** (optional): search by name, area or entity ID and pick a device. Select an entity to monitor its availability. A **Suggested match** appears when a device name resembles the code's name; **Refresh from HA** fills blank metadata without replacing your values.
+6. **Device details:** In use and Automatic/Manual tracking, Vendor, Product, Type, Area (with your Home Assistant areas as suggestions), Connectivity (Wi-Fi, Thread, Zigbee, Bluetooth, Z-Wave), Description and Notes. Vendor and product decoded from a Matter or Z-Wave payload fill only empty fields you have not typed in.
 
 Save with **Save code** (`Enter`, or `Ctrl`/`⌘`+`Enter` from any field), or with **Save & scan next** to go straight to
 the scanner. **Cancel** or `Esc` closes the editor, and asks first if you changed something. If the code is a
@@ -159,13 +167,13 @@ duplicate, a notice says *Already saved as "…"* with **Open existing**, and yo
 The details sheet shows:
 
 - The label, plus four buttons: **Copy code**, **Present**, **Download** and **Invert**.
-- The **manual setup code** and raw **QR payload**, each with a copy button.
+- The **manual setup code** and raw **QR payload**, each with a copy button. Matter codes scale to their available width, including 21-digit codes on the QR label, in details and in full-screen presentation.
 - The linked **Home Assistant device**, or a suggestion (see below).
 - **Device** facts: type, area, connectivity, categories, and the added and updated dates.
 - **Decoded payload** (decoded offline in your browser):
   - **Matter:** vendor ID and product ID (with the official names when the CSA registry knows them), passcode and whether it is valid, discriminator, discovery modes (Soft-AP, BLE, IP network) and commissioning flow. Links go to the vendor site, product page, support page and the CSA DCL entry.
   - **Z-Wave:** SmartStart/S2 and version, requested security classes, Z-Wave / Long Range, the DSK with its PIN underlined, device class, and manufacturer, product type and product ID. Names come from the bundled zwave-js device database, with a link to its page.
-  - **HomeKit:** pairing code, setup ID and accessory category.
+  - **HomeKit:** pairing code, setup ID, accessory category and IP/BLE/WAC capabilities. Expand QR details for flags, category ID, format version and reserved bits.
 
 Use `↑` `↓` (or `K` `J`) for the previous or next code, `D` to jump to the decoded payload, and `Shift`+`D` to download.
 **Move to Trash** and **Edit** are at the bottom.
@@ -180,11 +188,27 @@ Use `↑` `↓` (or `K` `J`) for the previous or next code, `D` to jump to the d
 Linking a code to a device lets you jump from the code to that device's page in Home Assistant.
 
 - In the details, an unlinked code may show **Suggested Home Assistant device** with **Link device**.
-- In the editor, search the **Home Assistant device** field by name or area. Devices with the same name show their area. A code is linked only when you pick a device from the list.
+- In the editor, search the **Home Assistant device** field by name, area or entity ID. Devices with the same name show their area and entities. A code is linked only when you pick a device from the list; choose an entity to monitor its availability.
 - Once linked, **Open in Home Assistant** opens the device page. Inside Home Assistant it opens in the main window; in a plain browser tab it opens in a new tab. **Unlink** is in the **⋯** menu next to it.
 
 If Home Assistant cannot be reached, the device list is empty and you can link later. Area suggestions come from
 your Home Assistant areas, but you can type any area.
+
+### Automatic In use
+
+Under **Device details → In use tracking**, choose **Automatic from Home Assistant**
+or **Manual**. Automatic tracking checks linked devices every minute and marks
+them In use only after HA confirms a usable eligible entity state. Off, idle and
+closed can confirm deployment; an unknown/unavailable state or registry listing
+alone cannot. Temporary outages retain the previous flag. Confirmed registry
+removal requires two successful checks at least a minute apart; explicit unlinking
+or changing the linked device clears automatic use. Each automatic save verifies
+a current-vault backup and preserves concurrent edits.
+
+Toggling the In use switch selects Manual and preserves that choice. Choose
+Automatic again to resume checks. Entity availability is a separate indication;
+an offline deployed device stays In use during an outage. Matter does not imply
+Thread: select the device's actual connectivity.
 
 ### Search Home Assistant
 
@@ -196,7 +220,13 @@ Existing records are matched by their HA device/entity IDs or by equivalent pair
 
 Discovery recognizes validated Matter, HomeKit and Z-Wave payloads, plus Zigbee/Tuya label signatures. It reads structured QR payloads and recognized code attributes such as `setup_code`, `pairing_code`, `matter_qr_code`, `homekit_setup_uri`, `smartstart_qr` and `zigbee_install_code`. Code-named sensors may expose a code as their state. Ordinary numeric sensor readings are ignored. Uncertain protocols, multiple matches/codes or conflicting identities require manual review; records in Trash are not recreated automatically.
 
-The integration must expose the code in HA for discovery to find it. This cannot recover hidden pairing codes or pair/change HA devices. **Pull code from HA** in the editor remains available for an explicitly chosen attribute that discovery does not recognize. Codes with leading zeros must be exposed as text.
+Devices can be included even when their integrations expose no pairing code;
+review the available metadata and add missing codes later in the editor. Unknown
+protocols remain unknown. Matching uses HA device/entity identity or pairing-code
+identity; possible same-name unlinked records and conflicts need manual review.
+This cannot recover hidden pairing codes or pair/change HA devices. **Pull code
+from HA** remains available for an explicitly chosen attribute. Codes with leading
+zeros must be exposed as text.
 
 Safety backups use unique `backups/anti_matter_YYYYMMDD_HHMMSS_<unique-id>.json` filenames. Applying a batch does not overwrite or delete earlier backups. The usual scheduled/manual backup retention rules still apply when those backups run. Search previews expire after five minutes; search again if needed.
 
@@ -266,6 +296,10 @@ The add-on's config folder is `/config` inside the add-on. Over Samba it is:
 `74e2a2e6`. Older setups call the share `addon_configs`. This folder is included in Home Assistant backups whenever
 the Anti-Matter add-on is part of the backup.
 
+Standalone Docker mounts the same storage files in its persistent `/config`
+volume; saved label copies are in `/config/media/anti_matter`. Its volume needs
+its own backup and is not included in Home Assistant backups.
+
 ### Moving from another repository
 
 Anti-Matter installed from a different repository (for example a fork instead of `Cl3tus/HA-Addons`) is a separate
@@ -273,11 +307,12 @@ add-on with its own, empty folder. Your old vault stays in the old folder. To br
 
 - **The vault:** click **Export** in the old Anti-Matter, then **Import a JSON export** in the new one. A file from
   the old `backups/` folder, or the old `anti_matter.json`, works too.
-- **Everything, including the Trash and backups:** stop the new add-on, copy the four items listed above from the old
-  `…_anti_matter` folder into the new one, then start it.
+- **Everything, including Trash and backups:** stop both apps and
+  copy the complete old `…_anti_matter` storage folder into the new one, then
+  start the new app. Do not let two instances write the same storage directory.
 
 HomeKit codes saved by 2.x are repaired either way. Set the add-on options again on the Configuration tab, then
-uninstall the old add-on.
+confirm the copied records before uninstalling the old app.
 
 ---
 
@@ -390,8 +425,9 @@ The add-on's **Log** tab shows what happened. Pairing codes and payloads are alw
 
 ## Privacy and security
 
-- **Local storage.** Your codes are stored only on your Home Assistant, as plain JSON. They are not encrypted, so treat the Samba share, Home Assistant backups and exported files like a password list.
+- **Local storage.** Your codes are plain JSON on your HA host or in the standalone Docker volume. They are not encrypted, so protect the storage folder, backups and exported files like a password list.
 - **One outbound request.** When you open, edit or scan a Matter code, the add-on asks the official CSA Distributed Compliance Ledger (`on.dcl.csa-iot.org`) for the vendor and product name. Only the vendor ID and product ID are sent: never the passcode or the QR payload. It is best-effort, and the app works fully without internet access. There is no setting to turn it off.
 - **Offline everything else.** Scanning, decoding and Z-Wave device names work offline. Fonts, icons and the decoder are bundled. There is no telemetry, no account and no cloud. External links open only when you select them.
 - **Home Assistant.** The add-on reads device metadata, areas and entity states/attributes, and never changes anything in Home Assistant.
 - **Who can open it.** The Anti-Matter panel is available to **every Home Assistant user**, including non-admins, and they can read all codes. Only give Home Assistant accounts to people you trust with these codes. Hiding the panel (**Show in sidebar** off on the add-on's page) is not a security boundary.
+- **Standalone access.** Docker has no app login. Its default port binds to localhost; use an authenticated HTTPS proxy for access from another device.
