@@ -22,17 +22,22 @@ text>, ...extra}}``. ``error`` is a stable machine-readable code the UI localize
     invalid_code                 400     label/card renderer rejected the stored code
     nothing_to_render            404     label.png / save-to-media: no manual code and no QR
     invalid_import               400     POST /api/import: not a valid vault export
-    storage_error                500     POST /api/import: vault write failed
-    backup_failed                500     POST /api/backup: backup write failed
+    storage_error                500     import/discovery apply: vault write failed
+    backup_failed                500     backup/discovery apply: backup write failed
     invalid_upload               400     save-to-media: bad PNG/SVG, or unsafe SVG content
     unsupported_media_type       415     save-to-media: image body that is not PNG or SVG
     too_large                    413     save-to-media: upload over 8 MB
     media_unavailable            500     save-to-media: /media folder missing or not writable
-    ha_attribute_not_found       404     GET /api/ha/attribute
-    ha_unavailable               503     HA device lookup, refresh or entity status failed
+    ha_attribute_not_found       404     GET /api/ha/attribute or /api/ha/pairing-code
+    ha_code_invalid              422     HA pairing attribute is not a bounded text/integer
+    ha_unavailable               503     HA lookup, refresh, entity status, pull or discovery failed
     ha_not_linked                400     POST /api/codes/{id}/ha-refresh: no linked device
     ha_device_not_found          404     HA metadata refresh: linked device is missing
     ha_link_changed              409     HA metadata refresh: link changed during request
+    ha_discovery_expired          409     discovery apply: preview expired or already applied
+    ha_discovery_changed          409     discovery apply: vault/Trash changed after preview
+    ha_discovery_source_changed   409     discovery apply: HA proposal changed after preview
+    ha_discovery_invalid_selection 422    discovery apply: unknown/duplicate/ineligible selection
     invalid_request              422     request body/query failed validation; extra ``errors``
     not_found / method_not_allowed / bad_request / http_error
                                          fallback for framework errors (unknown route etc.)
@@ -50,9 +55,12 @@ import json
 import logging
 import os
 import re
+import time
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
+from uuid import uuid4
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -60,15 +68,17 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.staticfiles import StaticFiles
+from offline_viewer import build_viewer
 from starlette.types import Scope
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from qrcode.exceptions import DataOverflowError
 
 from backup_schedule import is_due, load_settings, mark_ran, period_key, save_settings
 from ha_client import HomeAssistantClient
+from ha_discovery import collect_sources, plan_sources, public_row
 from matter_dcl import fetch_model_info, fetch_vendor_info
 from models import (
     HaLink,
@@ -107,7 +117,7 @@ from zwave_payload import (
 from zwave_device_db import lookup_device as lookup_zwave_device
 from models import Vault
 from qr_svg import DEFAULT_BORDER as QR_DEFAULT_BORDER, clamp_border, qr_svg
-from storage import VaultStorage
+from storage import VaultStorage, VaultChangedError, VaultBackupError
 
 logging.basicConfig(level=logging.INFO)
 _LOGGER = logging.getLogger("anti_matter")
@@ -116,7 +126,7 @@ _LOGGER = logging.getLogger("anti_matter")
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-APP_VERSION = "3.0.4"
+APP_VERSION = "3.1.0"
 PORT = int(os.environ.get("ANTIMATTER_PORT", "8099"))
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -1297,11 +1307,139 @@ async def ha_areas():
 
 
 @app.get("/api/ha/attribute")
-async def ha_attribute(entity_id: str, attribute: str):
+async def ha_attribute(
+    entity_id: str = Query(pattern=r"^[a-z_]+\.[a-z0-9_]+$", max_length=255),
+    attribute: str = Query(min_length=1, max_length=255),
+):
     value = await ha.get_attribute(entity_id, attribute)
     if value is None:
         raise _api_error(404, "ha_attribute_not_found", "Entity or attribute not found")
     return {"entity_id": entity_id, "attribute": attribute, "value": value}
+
+
+@app.get("/api/ha/pairing-code")
+async def ha_pairing_code(
+    entity_id: str = Query(pattern=r"^[a-z_]+\.[a-z0-9_]+$", max_length=255),
+    attribute: str = Query(min_length=1, max_length=255),
+):
+    """Read a scalar code for editor review. Never save or log attribute values."""
+    if not ha.enabled:
+        raise _api_error(503, "ha_unavailable", "Home Assistant is unavailable.")
+    try:
+        value = await ha.get_attribute(entity_id, attribute)
+    except Exception:
+        raise _api_error(503, "ha_unavailable", "Home Assistant is unavailable.") from None
+    if value is None:
+        raise _api_error(404, "ha_attribute_not_found", "Entity or attribute not found.")
+    # Keep long integer codes exact; bool is an int subclass, not a pairing code.
+    if type(value) not in (str, int):
+        raise _api_error(422, "ha_code_invalid", "Attribute must contain a text or integer code.")
+    text = str(value).strip()
+    if not text or len(text) > 8192:
+        raise _api_error(422, "ha_code_invalid", "Attribute must contain a nonempty code up to 8192 characters.")
+    return JSONResponse({"text": text}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/viewer")
+async def download_viewer(lang: str = Query(default="en", max_length=32)):
+    return HTMLResponse(build_viewer(lang), headers={
+        "Content-Disposition": 'attachment; filename="anti-matter-viewer.html"',
+        "Cache-Control": "no-store",
+    })
+
+
+# Pairing values stay in short-lived server memory, never in client requests/logs.
+_discovery_sessions: OrderedDict[str, dict] = OrderedDict()
+_DISCOVERY_TTL = 300
+
+
+class DiscoveryApplyBody(BaseModel):
+    session_id: str = Field(min_length=32, max_length=32, pattern=r"^[0-9a-f]{32}$")
+    candidate_ids: list[Annotated[str, Field(min_length=32, max_length=32, pattern=r"^[0-9a-f]{32}$")]] = Field(min_length=1, max_length=1000)
+
+
+def _expire_discovery_sessions():
+    now = time.monotonic()
+    for key in list(_discovery_sessions):
+        if now - _discovery_sessions[key]["created"] > _DISCOVERY_TTL:
+            del _discovery_sessions[key]
+
+
+async def _ha_discovery_sources():
+    if not ha.enabled:
+        raise _api_error(503, "ha_unavailable", "Home Assistant is unavailable.")
+    try:
+        devices, states = await asyncio.gather(ha.list_devices(refresh=True), ha.list_states())
+        return collect_sources(devices, states, _find_duplicate_code)
+    except Exception:
+        raise _api_error(503, "ha_unavailable", "Home Assistant discovery is unavailable.") from None
+
+
+@app.post("/api/ha/discover")
+async def discover_ha_codes():
+    sources = await _ha_discovery_sources()
+    vault = storage.load()
+    rows = plan_sources(sources, vault, storage.load_bin(), _find_duplicate_code)
+    _expire_discovery_sessions()
+    while len(_discovery_sessions) >= 16:
+        _discovery_sessions.popitem(last=False)
+    token = uuid4().hex
+    session = {"created": time.monotonic(), "revision": storage.revision(),
+               "rows": {uuid4().hex: row for row in rows}}
+    _discovery_sessions[token] = session
+    asyncio.get_running_loop().call_later(_DISCOVERY_TTL + 1, _expire_discovery_sessions)
+    return JSONResponse({"session_id": token, "devices_searched": len(sources),
+        "without_codes": sum(not source["payloads"] for source in sources),
+        "rows": [public_row(row, row_id) for row_id, row in session["rows"].items()]}, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/ha/discover/apply")
+async def apply_ha_discovery(body: DiscoveryApplyBody):
+    _expire_discovery_sessions()
+    session = _discovery_sessions.get(body.session_id)
+    if session is None:
+        raise _api_error(409, "ha_discovery_expired", "Search Home Assistant again; this preview has expired.")
+    selected = [session["rows"].get(row_id) for row_id in body.candidate_ids]
+    if len(set(body.candidate_ids)) != len(body.candidate_ids) or any(row is None or row["status"] not in {"new", "update"} for row in selected):
+        raise _api_error(422, "ha_discovery_invalid_selection", "Choose valid additions or blank-field updates.")
+    sources = await _ha_discovery_sources()
+    # HA calls yield; a concurrent edit/deletion/relink must invalidate the preview.
+    _expire_discovery_sessions()
+    if _discovery_sessions.get(body.session_id) is not session or storage.revision() != session["revision"]:
+        raise _api_error(409, "ha_discovery_changed", "Your vault changed. Search again before applying changes.")
+    vault = storage.load()
+    fresh = {row["key"]: row for row in plan_sources(sources, vault, storage.load_bin(), _find_duplicate_code)}
+    if any(fresh.get(row["key"]) != row for row in selected):
+        raise _api_error(409, "ha_discovery_source_changed", "Home Assistant details changed. Search again before applying changes.")
+    added = updated = 0
+    for row in selected:
+        if row["status"] == "new":
+            code = MatterCode(**row["patch"])
+            added += 1
+        else:
+            code = _find_code(vault, row["target_id"])
+            data = code.model_dump(mode="json")
+            data.update(row["patch"])
+            code = MatterCode.model_validate(data)
+            code.updated_at = utc_now()
+            updated += 1
+        if _find_duplicate_code(vault, code.model_dump(mode="json"), exclude_id=code.id):
+            raise _api_error(409, "ha_discovery_changed", "A matching code already exists. Search again before applying changes.")
+        if row["status"] == "new":
+            vault.codes.append(code)
+        else:
+            vault.codes = [code if c.id == code.id else c for c in vault.codes]
+    try:
+        backup = storage.save_with_backup(vault, session["revision"])
+    except VaultChangedError:
+        raise _api_error(409, "ha_discovery_changed", "Your vault changed. Search again before applying changes.") from None
+    except VaultBackupError:
+        raise _api_error(500, "backup_failed", "The safety backup failed. No changes were saved.") from None
+    except Exception:
+        raise _api_error(500, "storage_error", "The changes could not be saved.") from None
+    _discovery_sessions.pop(body.session_id, None)
+    _LOGGER.info("HA discovery applied: %d added, %d updated", added, updated)
+    return {"added": added, "updated": updated, "backup": backup.name}
 
 
 @app.get("/api/matter/vendor/{vendor_id}")

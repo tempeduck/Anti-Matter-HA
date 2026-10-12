@@ -601,8 +601,13 @@
     var body = AM.byId("import-body");
     var confirmBtn = AM.byId("import-confirm");
     var kids = [
+      h("button", { type: "button", class: "btn btn--block", id: "io-ha-discovery", onclick: function () { AM.act("openHaDiscovery"); } },
+        icon("house-plug"), h("span", null, t("ha.discovery_title"))),
       h("button", { type: "button", class: "btn btn--block", id: "io-export", onclick: exportVault },
         icon("file-down"), h("span", null, AM.tNodes("import.export_file", { file: "" }, { file: h("span", { dir: "ltr" }, EXPORT_NAME) }))),
+      h("button", { type: "button", class: "btn btn--block", id: "io-viewer", onclick: downloadViewer },
+        icon("file-down"), h("span", null, t("viewer.download"))),
+      h("p", { class: "field__hint" }, t("viewer.download_hint")),
     ];
     if (!IMP) {
       kids.push(h("div", { class: "io-pick" },
@@ -705,6 +710,13 @@
       imp.busy = false;
       btn.disabled = false;
     }
+  }
+
+  async function downloadViewer() {
+    try {
+      var blob = await AM.api("/viewer?lang=" + encodeURIComponent(AM.locale()), { as: "blob" });
+      AM.download(blob, "anti-matter-viewer.html");
+    } catch (e) { AM.reportError(e); }
   }
 
   async function exportVault() {

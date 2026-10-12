@@ -10,6 +10,13 @@
 .am-spin { animation: am-spin 900ms linear infinite; }
 @media (prefers-reduced-motion: reduce) { .am-spin { animation: none; } }
 .tag.is-off { color: var(--text-3); }
+.had-select { display: flex; gap: 10px; align-items: center; min-block-size: 44px; }
+.had-row { display: flex; gap: 12px; padding-block: 14px; border-block-end: 1px solid var(--line); }
+.had-row > input { flex: none; margin-block-start: 5px; inline-size: 20px; block-size: 20px; }
+.had-row__body { display: flex; flex-wrap: wrap; gap: 6px 10px; min-inline-size: 0; flex: 1; }
+.had-row__name { font-weight: 650; overflow-wrap: anywhere; }
+.had-row__body .field__hint { flex-basis: 100%; margin: 0; overflow-wrap: anywhere; }
+.had-row__entity { font-family: var(--font-mono); }
 .pills__set { display: flex; flex-wrap: wrap; gap: 6px; }
 .pills__note { font-size: var(--fs-small); align-self: center; }
 .readout .pills { align-items: center; }

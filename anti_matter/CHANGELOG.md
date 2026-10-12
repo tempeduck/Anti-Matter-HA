@@ -3,6 +3,14 @@
 Detailed per-commit history is in [git log](https://github.com/tempeduck/Anti-Matter-HA/commits/main).
 This file summarizes the notable changes by theme.
 
+## 3.1.0 — HA discovery, code pulls and offline backup viewer
+
+- **Search Home Assistant** from the sidebar, phone More menu or Import & export. Preview exposed pairing codes and missing metadata on linked records, then apply selected additions or blank-field updates. Match by HA device/entity IDs or pairing identity, preserve populated fields and chosen entity links, and skip conflicting/ambiguous or trashed records. Repeated searches do not create duplicates. Recheck HA and the vault before saving the batch with a verified safety backup; show progress, saved counts and recoverable errors.
+- **Pull code from HA** in the editor reads a selected entity's text or integer pairing-code attribute into the form. Reuse the existing protocol parsers and duplicate checks; review before saving. Confirm before replacing pairing data and preserve custom metadata and edits made during delayed requests. HA access remains read-only.
+- **Download offline backup viewer** from Import & export. The self-contained HTML opens current and 2.x JSON exports/backups locally, with search, category/protocol filters, metadata, pagination and complete stored QR labels. No HA, internet, uploads or persistent browser storage. Manual-only records remain manual-only.
+- Bundle the MIT-licensed qrcode-generator encoder at a pinned revision. Independently decode generated Matter, HomeKit, SmartStart and Unicode QR labels in regression tests; verify inert imported text, bad-file handling and delayed-response behavior.
+- New controls use English fallback text in the 24 supported locales. Existing translations are retained.
+
 ## 3.0.4 — HA entity links and safer imports
 
 - Search HA devices by their entity IDs and show those IDs in the picker, including devices with the same name and area (#9). Keep the device ID as the stable link.

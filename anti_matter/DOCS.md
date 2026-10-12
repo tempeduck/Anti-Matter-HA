@@ -186,6 +186,20 @@ Linking a code to a device lets you jump from the code to that device's page in 
 If Home Assistant cannot be reached, the device list is empty and you can link later. Area suggestions come from
 your Home Assistant areas, but you can type any area.
 
+### Search Home Assistant
+
+1. Choose **Search Home Assistant** in the sidebar, **More** on a phone, or **Import & export**. The search previews changes without saving them.
+2. Review **New code**, **Fill blanks**, **Already complete**, **Needs review** and **In Trash** rows. Each row shows its HA source, the fields to fill and proposed vendor/product/area values. **Open existing** opens a matched record for manual review. No rows are selected automatically; filtering and **Select all eligible visible items** help choose a batch.
+3. Choose **Apply selected**. Anti-Matter rechecks HA and the vault, verifies a backup of the current vault, then saves the selected changes together. A receipt shows added/updated counts and the backup filename. If HA or the vault changed after the preview, search again before applying.
+
+Existing records are matched by their HA device/entity IDs or by equivalent pairing codes, including manual/QR forms. Only empty fields are filled; existing names, notes, pairing data, categories and chosen entity links are preserved. A linked record can receive missing vendor/product/area even when its integration exposes no pairing code. Unlinked devices without an exposed code are not added. Names alone are not reliable enough to match records.
+
+Discovery recognizes validated Matter, HomeKit and Z-Wave payloads, plus Zigbee/Tuya label signatures. It reads structured QR payloads and recognized code attributes such as `setup_code`, `pairing_code`, `matter_qr_code`, `homekit_setup_uri`, `smartstart_qr` and `zigbee_install_code`. Code-named sensors may expose a code as their state. Ordinary numeric sensor readings are ignored. Uncertain protocols, multiple matches/codes or conflicting identities require manual review; records in Trash are not recreated automatically.
+
+The integration must expose the code in HA for discovery to find it. This cannot recover hidden pairing codes or pair/change HA devices. **Pull code from HA** in the editor remains available for an explicitly chosen attribute that discovery does not recognize. Codes with leading zeros must be exposed as text.
+
+Safety backups use unique `backups/anti_matter_YYYYMMDD_HHMMSS_<unique-id>.json` filenames. Applying a batch does not overwrite or delete earlier backups. The usual scheduled/manual backup retention rules still apply when those backups run. Search previews expire after five minutes; search again if needed.
+
 ---
 
 ## Categories
@@ -221,6 +235,7 @@ in `backups/anti_matter_YYYYMMDD_HHMMSS.json`, with the time in UTC.
 **Import & export:**
 
 - **Export** downloads `anti-matter-export.json`, which holds every code and category.
+- **Download offline backup viewer** downloads `anti-matter-viewer.html`. Keep it alongside your JSON export or backup. Open the HTML file in a browser, then choose the JSON file (up to 16 MB). Search, protocol/category filters, metadata and QR labels work without HA or internet. The viewer is read-only, uploads nothing and does not retain loaded data after you close it. It supports current and 2.x exports; a QR is shown only when the full payload was saved. To discard a loaded file, choose **Clear loaded file**.
 - **Import** reads a file and shows what is in it, for example "14 codes · 6 categories · 3 new, 11 already in your vault". It then offers:
   - **Merge**: add the codes and categories that are not in your vault yet, and keep everything you have. Entries that look like codes you already have are pointed out.
   - **Replace**: replace the whole vault with the file. A backup of your current vault is made first.
@@ -228,6 +243,12 @@ in `backups/anti_matter_YYYYMMDD_HHMMSS.json`, with the time in UTC.
 - To restore a backup, copy a file from `backups/` to your computer (over Samba), then import it with **Replace**.
 
 Backups and exports contain the vault only; the Trash is not included.
+
+### Pull a pairing code from a Home Assistant attribute
+
+In **Edit**, choose the Home Assistant device and an entity, then enter the attribute name shown in that entity's attributes (for example `setup_code`). Choose **Pull code from HA**, review the detected protocol and pairing fields, then choose **Save**. Replacing existing pairing data requires confirmation. Custom metadata stays intact, and a response that arrives after you change the pairing fields, entity or editor is discarded. Saving while a pull is pending cancels that pull and saves the current form.
+
+The integration must expose a supported pairing code as a text or integer attribute. Use text for codes with leading zeros. Missing attributes, unsupported values and unavailable HA connections show a message and leave saved records alone. This reads an existing attribute; it does not recover a hidden code, pair a device or change Home Assistant.
 
 ### Where your files are
 
@@ -372,5 +393,5 @@ The add-on's **Log** tab shows what happened. Pairing codes and payloads are alw
 - **Local storage.** Your codes are stored only on your Home Assistant, as plain JSON. They are not encrypted, so treat the Samba share, Home Assistant backups and exported files like a password list.
 - **One outbound request.** When you open, edit or scan a Matter code, the add-on asks the official CSA Distributed Compliance Ledger (`on.dcl.csa-iot.org`) for the vendor and product name. Only the vendor ID and product ID are sent: never the passcode or the QR payload. It is best-effort, and the app works fully without internet access. There is no setting to turn it off.
 - **Offline everything else.** Scanning, decoding and Z-Wave device names work offline. Fonts, icons and the decoder are bundled. There is no telemetry, no account and no cloud. External links open only when you select them.
-- **Home Assistant.** The add-on reads your device list and areas, and never changes anything in Home Assistant.
+- **Home Assistant.** The add-on reads device metadata, areas and entity states/attributes, and never changes anything in Home Assistant.
 - **Who can open it.** The Anti-Matter panel is available to **every Home Assistant user**, including non-admins, and they can read all codes. Only give Home Assistant accounts to people you trust with these codes. Hiding the panel (**Show in sidebar** off on the add-on's page) is not a security boundary.

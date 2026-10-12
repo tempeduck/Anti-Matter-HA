@@ -94,6 +94,9 @@
       cats: code ? AM.cat.idsOf(code) : [],
       haId: (c.ha_link && c.ha_link.device_id) || "",
       haEntity: (c.ha_link && c.ha_link.entity_id) || "",
+      haAttribute: "",
+      haPull: null,
+      haPullMessage: "",
       haText: "",
       inUse: !!c.in_use,
       vendor: c.device_vendor || "",
@@ -633,7 +636,7 @@
         m.haId ? h("div", { class: "suggest suggest--linked" },
           h("span", { class: "suggest__icon" }, icon("house-plug")),
           h("span", { class: "suggest__txt" }, h("span", null, t("detail.linked_device")), h("b", { dir: "auto" }, m.haText || t("detail.linked_unknown"))),
-          h("button", { type: "button", class: "btn btn--sm", onclick: function () { m.haId = ""; m.haEntity = ""; m.haText = ""; markDirty(); fillHa(); } }, icon("unlink"), h("span", null, t("detail.unlink")))) : null,
+          h("button", { type: "button", class: "btn btn--sm", onclick: function () { m.haId = ""; m.haEntity = ""; m.haPull = null; m.haPullMessage = ""; m.haText = ""; markDirty(); fillHa(); } }, icon("unlink"), h("span", null, t("detail.unlink")))) : null,
         h("div", { class: "notice" }, icon("cloud-off"), h("div", { class: "notice__body" }, h("span", null, t("editor.ha_unavailable")))));
       R.haInput = R.haStatus = R.haSuggest = R.haList = R.haEntity = null;
       return;
@@ -708,7 +711,7 @@
   }
   function haSelect(dev) {
     if (!dev) return;
-    if (m.haId !== dev.id) m.haEntity = "";
+    if (m.haId !== dev.id) { m.haEntity = ""; m.haAttribute = ""; m.haPull = null; m.haPullMessage = ""; }
     m.haId = dev.id;
     m.haText = AM.ha.label(dev);
     R.haInput.value = m.haText;
@@ -733,7 +736,7 @@
     inp.addEventListener("input", function () {
       m.haText = inp.value;
       var dev = exactDevice(inp.value);
-      if (!dev || m.haId !== dev.id) m.haEntity = "";
+      if (!dev || m.haId !== dev.id) { m.haEntity = ""; m.haAttribute = ""; m.haPull = null; m.haPullMessage = ""; }
       m.haId = dev ? dev.id : ""; // an id is stored only on an exact match
       if (dev) fillHaMetadata(dev);
       markDirty();
@@ -771,7 +774,7 @@
     });
     R.haClear.addEventListener("click", function () {
       m.haId = "";
-      m.haEntity = "";
+      m.haEntity = ""; m.haPull = null; m.haPullMessage = "";
       m.haText = "";
       inp.value = "";
       markDirty();
@@ -845,9 +848,61 @@
       h("option", { value: "" }, t("ha.device_only")),
       ids.map(function (eid) { return h("option", { value: eid }, eid); }));
     select.value = m.haEntity;
-    select.addEventListener("change", function () { m.haEntity = select.value; markDirty(); });
+    select.addEventListener("change", function () {
+      m.haEntity = select.value; m.haAttribute = ""; m.haPull = null; m.haPullMessage = "";
+      markDirty(); renderHaEntity();
+    });
     AM.fill(R.haEntity, h("label", { class: "field__label", for: "ed-ha-entity" }, t("ha.entity")),
       h("div", { class: "select-wrap", dir: "ltr" }, select, icon("chevron-down")), h("span", { class: "field__hint" }, t("ha.entity_hint")));
+    if (!m.haEntity) return;
+    var attr = h("input", { id: "ed-ha-attribute", class: "input", type: "text", maxlength: "255",
+      autocomplete: "off", spellcheck: "false", dir: "ltr", placeholder: "setup_code" });
+    attr.value = m.haAttribute;
+    var button = h("button", { id: "ed-ha-pull", type: "button", class: "btn btn--sm", onclick: pullHaCode,
+      disabled: saving || !!m.haPull || !str(m.haAttribute) }, icon("file-down"), h("span", null, t("ha.pull_code")));
+    R.haPullStatus = h("p", { id: "ed-ha-pull-status", class: "field__hint", role: "status", "aria-live": "polite" }, m.haPullMessage);
+    attr.addEventListener("input", function () {
+      m.haAttribute = attr.value; m.haPull = null; m.haPullMessage = "";
+      button.disabled = saving || !str(attr.value); R.haPullStatus.textContent = "";
+    });
+    R.haEntity.appendChild(h("div", { class: "field", style: "margin-top:12px" },
+      h("label", { class: "field__label", for: "ed-ha-attribute" }, t("ha.code_attribute")), attr,
+      h("span", { class: "field__hint" }, t("ha.pull_hint")), button, R.haPullStatus));
+  }
+
+  async function pullHaCode() {
+    if (!m || saving || m.haPull || !m.haEntity || !str(m.haAttribute)) return;
+    var model = m, generation = gen;
+    var request = { entity: m.haEntity, device: m.haId, attribute: str(m.haAttribute), payload: JSON.stringify(payloadBody()) };
+    m.haPull = request; m.haPullMessage = t("ha.pulling"); renderHaEntity();
+    function current() {
+      return m === model && gen === generation && m.haPull === request &&
+        m.haId === request.device && m.haEntity === request.entity && str(m.haAttribute) === request.attribute && AM.sheets.isOpen(SHEET);
+    }
+    function unchanged() { return current() && JSON.stringify(payloadBody()) === request.payload; }
+    try {
+      var result = await AM.api("/ha/pairing-code?entity_id=" + encodeURIComponent(request.entity) + "&attribute=" + encodeURIComponent(request.attribute));
+      if (!current()) return;
+      if (!unchanged()) { m.haPullMessage = t("ha.pull_stale"); return; }
+      var parsed = SCAN() && typeof result.text === "string" && result.text.length <= 8192 && SCAN().parseScannedText(result.text);
+      if (!parsed || parsed.recognized === false) { m.haPullMessage = t("ha.pull_invalid"); return; }
+      var before = payloadBody();
+      if (str(before.manual_code) || str(before.qr_payload)) {
+        var replace = await AM.confirm({ title: t("ha.pull_replace"), message: t("ha.pull_replace_hint"),
+          confirmLabel: t("action.replace"), danger: false });
+        if (!current()) return;
+        if (!unchanged()) { m.haPullMessage = t("ha.pull_stale"); return; }
+        if (!replace) { m.haPullMessage = ""; return; }
+      }
+      applyToModel(parsed);
+      m.haPull = null; m.haPullMessage = t("ha.pull_ready");
+      build(); liveDup();
+    } catch (e) {
+      if (current()) m.haPullMessage = t(e && e.code === "ha_attribute_not_found" ? "ha.pull_missing"
+        : e && e.code === "ha_code_invalid" ? "ha.pull_invalid" : "ha.pull_failed");
+    } finally {
+      if (current()) { m.haPull = null; renderHaEntity(); }
+    }
   }
   var suggestTimer = null;
   function refreshSuggest() {
@@ -1173,6 +1228,7 @@
       b.disabled = on;
       b.setAttribute("aria-busy", String(on));
     });
+    if (m) renderHaEntity();
   }
   async function save(next) {
     if (!m || saving) return;
@@ -1184,6 +1240,8 @@
       AM.haptic("failure");
       return;
     }
+    // Save captures the current form and invalidates an unfinished attribute read.
+    m.haPull = null; m.haPullMessage = "";
     var body = buildBody();
     var dupBody = {
       code_type: body.code_type, qr_payload: body.qr_payload || "", manual_code: body.manual_code || "",

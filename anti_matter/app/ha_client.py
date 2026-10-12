@@ -67,6 +67,18 @@ class HomeAssistantClient:
             ids = [e for e in ids if e.startswith(prefix)]
         return sorted(ids)
 
+    async def list_states(self) -> list[dict[str, Any]]:
+        """One read for discovery, without logging or caching pairing attributes."""
+        if not self.enabled:
+            return []
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(f"{SUPERVISOR_CORE}/states", headers=self._headers())
+            response.raise_for_status()
+            states = response.json()
+        if not isinstance(states, list):
+            raise ValueError("Invalid HA state response")
+        return states
+
     async def list_devices(self, *, refresh: bool = False) -> list[dict[str, Any]]:
         """Device identity, metadata and entity IDs for devices with a state — via the
         template API's `device_id()`/`device_attr()`/`area_name()` functions (no REST

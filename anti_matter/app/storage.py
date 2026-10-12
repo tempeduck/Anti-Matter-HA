@@ -7,16 +7,26 @@ Home Assistant exposes over Samba at \\<HA-IP>\app_configs\<repo-hash>_anti_matt
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 from pathlib import Path
 from threading import Lock
+from uuid import uuid4
 
 from models import TrashBin, Vault
 
 DEFAULT_DATA_DIR = "/data"
 VAULT_FILENAME = "anti_matter.json"
 BIN_FILENAME = "anti-matter-bin.json"
+
+
+class VaultChangedError(RuntimeError):
+    pass
+
+
+class VaultBackupError(RuntimeError):
+    pass
 
 
 def _repair_homekit_codes(codes) -> bool:
@@ -66,6 +76,55 @@ class VaultStorage:
     def save(self, vault: Vault) -> None:
         with self._lock:
             self._write_unlocked(vault)
+
+    def _revision_unlocked(self) -> str:
+        digest = hashlib.sha256()
+        for path in (self.path, self.bin_path):
+            data = path.read_bytes() if path.exists() else b""
+            digest.update(len(data).to_bytes(8, "big"))
+            digest.update(data)
+        return digest.hexdigest()
+
+    def revision(self) -> str:
+        with self._lock:
+            return self._revision_unlocked()
+
+    def save_with_backup(self, vault: Vault, expected_revision: str) -> Path:
+        """Commit a reviewed discovery batch under one lock, after a verified backup.
+
+        Existing backups are not overwritten or pruned. The revision includes the
+        Trash so a concurrent deletion cannot recreate a trashed record.
+        """
+        from datetime import datetime, timezone
+
+        with self._lock:
+            if self._revision_unlocked() != expected_revision:
+                raise VaultChangedError("Vault changed")
+            dest = None
+            try:
+                original = self.path.read_bytes()
+                directory = self.data_dir / "backups"
+                directory.mkdir(parents=True, exist_ok=True)
+                stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+                dest = directory / f"anti_matter_{stamp}_{uuid4().hex}.json"
+                with dest.open("xb") as backup:
+                    os.chmod(dest, 0o600)
+                    backup.write(original)
+                    backup.flush()
+                    os.fsync(backup.fileno())
+                if dest.read_bytes() != original:
+                    raise OSError("Backup verification failed")
+            except Exception:
+                if dest is not None:
+                    try:
+                        dest.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                raise VaultBackupError("Backup failed") from None
+            if self._revision_unlocked() != expected_revision:
+                raise VaultChangedError("Vault changed")
+            self._write_unlocked(vault)
+            return dest
 
     def load_bin(self) -> TrashBin:
         with self._lock:

@@ -67,6 +67,7 @@
     on("nav-backups", "click", function () { act("openBackup"); });
     on("backup-card", "click", function () { act("openBackup"); });
     on("nav-io", "click", function () { act("openImportExport"); });
+    on("nav-ha-discovery", "click", function () { act("openHaDiscovery"); });
     on("btn-new-category", "click", function () { act("openCategoryEditor", null); });
     on("btn-more", "click", openMore);
     on("dock-more", "click", openMore);
@@ -272,6 +273,7 @@
       h("div", { class: "more-list" },
         moreItem({ id: "more-trash", icon: "trash-2", label: t("nav.trash"), desc: n ? t("more.trash_desc", { count: trashCodes }) : t("more.trash_empty"), badge: n ? AM.fmt.number(n) : null }),
         moreItem({ id: "more-backups", icon: "database-backup", label: t("nav.backups"), desc: backupDesc, chev: true }),
+        moreItem({ id: "more-ha-discovery", icon: "house-plug", label: t("ha.discovery_title"), desc: t("ha.discovery_short") }),
         moreItem({ id: "more-export", icon: "file-down", label: t("more.export"), desc: "anti-matter-export.json" }),
         moreItem({ id: "more-import", icon: "file-up", label: t("more.import"), desc: t("more.import_desc") }),
         moreItem({ id: "more-categories", icon: "tags", label: t("nav.manage_categories"), desc: t("more.categories_desc", { count: cats }), chev: true })),
@@ -295,6 +297,7 @@
         "more-lang": closeThen(function () { openLanguage(null); }),
         "more-trash": closeThen(function () { act("openTrash"); }),
         "more-backups": closeThen(function () { act("openBackup"); }),
+        "more-ha-discovery": closeThen(function () { act("openHaDiscovery"); }),
         "more-export": closeThen(function () { act("exportVault"); }),
         "more-import": closeThen(pickImport),
         "more-categories": closeThen(function () { act("openCategoryManager"); }),

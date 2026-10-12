@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="anti_matter/CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.0.4-blue" alt="Version 3.0.0"></a>
+  <a href="anti_matter/CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.1.0-blue" alt="Version 3.0.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Home%20Assistant-add--on-41BDF5?logo=homeassistant&logoColor=white" alt="Home Assistant add-on">
   <img src="https://img.shields.io/badge/aarch64-yes-green" alt="Supports aarch64">
@@ -76,8 +76,11 @@ Anti-Matter keeps all of those codes in one place in Home Assistant:
 The add-on also includes:
 
 - **Home Assistant device and entity links.** Search the device picker by name or entity ID. Selecting a device fills empty vendor, product and area fields. **Refresh from HA** fills remaining empty fields without replacing your values. Optionally choose an entity to show its availability in details, and jump straight to the device page.
+- **Search Home Assistant.** Use the sidebar button, **More** on a phone, or **Import & export** to find exposed pairing codes and missing details on linked records. Review the preview and select which additions or blank-field updates to apply. Matching uses HA device/entity IDs and pairing-code identity; ambiguous matches need review. Existing values and Trash stay intact, and a verified vault backup is saved before applying the batch. HA integrations must expose their codes for discovery to find them.
 - **Trash with undo.** Deleted codes and categories wait in the Trash until you restore them or empty the bin.
 - **Scheduled backups.** Back up hourly, daily, weekly or monthly, with automatic pruning. Export and import go through one JSON file.
+- **Pull an exposed pairing code from HA.** In the editor, select a device and entity, enter the attribute name and choose **Pull code from HA**. Review the detected protocol and pairing data before **Save**. Existing pairing data requires confirmation before replacement; late responses preserve your edits. The HA integration must expose the code as a text or integer attribute. Store codes with leading zeros as text. This action reads HA and does not pair a device.
+- **Offline backup viewer.** **Import & export → Download offline backup viewer** gives you a self-contained HTML file. Open it in a browser and choose an Anti-Matter JSON export or backup to search records, read metadata and display stored QR codes without HA or internet. Current and 2.x exports are supported. Nothing is uploaded or saved by the viewer; manual-only records do not invent a QR payload.
 - **Light, dark and Invert.** The theme follows Home Assistant, and Invert shows white-on-black QR codes for dark rooms. The whole app works by keyboard, mouse and touch.
 
 **HA availability and connectivity.** Availability reflects the selected HA entity, not a separate network probe or a HomeKit pairing check. An app update entity describes the app, not every accessory it exports. **In use/Spare** remains your own inventory flag. The legacy JSON field `conn_matter` means **Thread**; the protocol is stored in `code_type`. Matter devices using Wi-Fi should not have Thread inferred from their protocol alone.
@@ -274,7 +277,7 @@ Everything lives in the add-on's config folder, `/config` inside the add-on. Ove
 - **Your codes stay local.** The vault, the Trash and the backups are plain JSON files on your Home Assistant. They are not encrypted, so treat the Samba share, Home Assistant backups and exported files like a password list.
 - **One optional outbound request.** When you open, edit or scan a **Matter** code, the add-on asks the official CSA Distributed Compliance Ledger (`on.dcl.csa-iot.org`) for the vendor and product name. Only the vendor ID and product ID are sent: never the passcode, the QR payload or anything else. The request comes from the add-on itself, not your browser. It is best-effort: when there is no internet, names are simply missing. There is no switch to turn it off, but blocking internet access for the add-on is harmless.
 - **Everything else is offline.** Z-Wave names come from a bundled copy of the zwave-js device database. The QR decoder, fonts and icons are bundled, so nothing loads from a CDN. There is no telemetry, no analytics, no account and no cloud. External links (vendor site, CSA DCL, zwave-js) open only when you click them.
-- **Home Assistant access is read-only in practice.** The add-on reads your device list and areas to suggest links. It never changes anything in Home Assistant.
+- **Home Assistant access is read-only in practice.** The add-on reads device metadata, areas and entity states/attributes to suggest links and discover exposed pairing codes. It never changes anything in Home Assistant.
 - **Who can see the codes: every Home Assistant user.** The panel is registered for all users, admins or not (`panel_admin: false`). Anyone who can log in to Home Assistant can open the vault and read the pairing codes. Only give Home Assistant accounts to people you would trust with these codes. Turning off **Show in sidebar** on the add-on's page hides the panel, but it is not a security boundary. There is no admin-only option yet.
 - **Logs never contain your codes.** Pairing codes and payloads are redacted from the add-on log.
 
@@ -360,6 +363,9 @@ Anti-Matter builds on [zxing-wasm](https://github.com/Sec-ant/zxing-wasm) (MIT) 
 JetBrains Mono fonts (SIL OFL 1.1), the [zwave-js](https://github.com/zwave-js/node-zwave-js) device database (MIT),
 [FastAPI](https://fastapi.tiangolo.com) and [python-qrcode](https://github.com/lincolnloop/python-qrcode). Their
 licence files ship next to the vendored copies.
+
+The standalone backup viewer bundles Kazuhiko Arase's
+[qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (MIT), pinned to a reviewed commit.
 
 ## Trademarks
 
